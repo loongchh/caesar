@@ -4,7 +4,7 @@ A model for Question Answer system
 import logging
 
 import tensorflow as tf
-from util import ConfusionMatrix, Progbar, minibatches
+#from util import ConfusionMatrix, Progbar, minibatches
 import evaluate
 
 FLAGS = tf.app.flags.FLAGS
@@ -147,50 +147,50 @@ class QAModel:
     def evaluate(self, sess, val_set):
         raise NotImplementedError
 
-    def run_epoch(self, sess, train_examples, val_set):
-        prog = Progbar(target=1 + int(len(train_examples) / FLAGS.batch_size))
-        for i, batch in enumerate(minibatches(train_examples, FLAGS.batch_size)):
-            loss = self.train_on_batch(sess, *batch)
-            prog.update(i + 1, [("train loss", loss)])
-        print("")
-
-        logger.info("Evaluating on development data")
-        scores = self.evaluate(sess, val_set)
-        logger.info(scores)
-
-        f1 = scores['f1']
-        return f1
-
-    def output(self, sess, inputs_raw, inputs=None):
-        """
-        Reports the output of the model on examples (uses helper to featurize each example).
-        """
-        preds = []
-        prog = Progbar(target=1 + int(len(inputs) / FLAGS.batch_size))
-        for i, batch in enumerate(minibatches(inputs, FLAGS.batch_size, shuffle=False)):
-            # Ignore predict
-            batch = batch[:1] + batch[2:]
-            preds_ = self.predict_on_batch(sess, *batch)
-            preds += list(preds_)
-            prog.update(i + 1, [])
-        return preds
-
-    def fit(self, sess, saver, train_examples_raw, dev_set_raw):
-        best_score = 0.
-
-        train_examples = self.preprocess_sequence_data(train_examples_raw)
-        dev_set = self.preprocess_sequence_data(dev_set_raw)
-
-        for epoch in range(self.config.n_epochs):
-            logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
-            score = self.run_epoch(sess, train_examples, dev_set, train_examples_raw, dev_set_raw)
-            if score > best_score:
-                best_score = score
-                if saver:
-                    logger.info("New best score! Saving model in %s", self.config.model_output)
-                    saver.save(sess, self.config.model_output)
-            print("")
-            if self.report:
-                self.report.log_epoch()
-                self.report.save()
-        return best_score
+#    def run_epoch(self, sess, train_examples, val_set):
+#        prog = Progbar(target=1 + int(len(train_examples) / FLAGS.batch_size))
+#        for i, batch in enumerate(minibatches(train_examples, FLAGS.batch_size)):
+#            loss = self.train_on_batch(sess, *batch)
+#            prog.update(i + 1, [("train loss", loss)])
+#        print("")
+#
+#        logger.info("Evaluating on development data")
+#        scores = self.evaluate(sess, val_set)
+#        logger.info(scores)
+#
+#        f1 = scores['f1']
+#        return f1
+#
+#    def output(self, sess, inputs_raw, inputs=None):
+#        """
+#        Reports the output of the model on examples (uses helper to featurize each example).
+#        """
+#        preds = []
+#        prog = Progbar(target=1 + int(len(inputs) / FLAGS.batch_size))
+#        for i, batch in enumerate(minibatches(inputs, FLAGS.batch_size, shuffle=False)):
+#            # Ignore predict
+#            batch = batch[:1] + batch[2:]
+#            preds_ = self.predict_on_batch(sess, *batch)
+#            preds += list(preds_)
+#            prog.update(i + 1, [])
+#        return preds
+#
+#    def fit(self, sess, saver, train_examples_raw, dev_set_raw):
+#        best_score = 0.
+#
+#        train_examples = self.preprocess_sequence_data(train_examples_raw)
+#        dev_set = self.preprocess_sequence_data(dev_set_raw)
+#
+#        for epoch in range(self.config.n_epochs):
+#            logger.info("Epoch %d out of %d", epoch + 1, self.config.n_epochs)
+#            score = self.run_epoch(sess, train_examples, dev_set, train_examples_raw, dev_set_raw)
+#            if score > best_score:
+#                best_score = score
+#                if saver:
+#                    logger.info("New best score! Saving model in %s", self.config.model_output)
+#                    saver.save(sess, self.config.model_output)
+#            print("")
+#            if self.report:
+#                self.report.log_epoch()
+#                self.report.save()
+#        return best_score
