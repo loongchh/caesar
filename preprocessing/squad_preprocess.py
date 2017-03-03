@@ -58,7 +58,7 @@ def maybe_download(url, filename, prefix, num_bytes=None):
     # Check the stats and make sure they are ok
     file_stats = os.stat(os.path.join(prefix,filename))
     if num_bytes is None or file_stats.st_size == num_bytes:
-        print("File {} successfully downloaded".format(filename))
+        print("File {} successfully loaded".format(filename))
     else:
         raise Exception("Unexpected dataset size. Please get the dataset using a browser.")
 
@@ -202,20 +202,25 @@ def split_tier(prefix, train_percentage = 0.9, shuffle=False):
 
 if __name__ == '__main__':
 
-    prefix = os.path.join("data", "squad")
+    download_prefix = os.path.join("download", "squad")
+    data_prefix = os.path.join("data", "squad")
 
-    print("Storing datasets in {}".format(prefix))
+    print("Downloading datasets into {}".format(download_prefix))
+    print("Preprocessing datasets into {}".format(data_prefix))
 
-    if not os.path.exists(prefix):
-        os.makedirs(prefix)
+    if not os.path.exists(download_prefix):
+        os.makedirs(download_prefix)
+    if not os.path.exists(data_prefix):
+        os.makedirs(data_prefix)
 
     train_filename = "train-v1.1.json"
+    dev_filename = "dev-v1.1.json"
 
-    train_dataset = maybe_download(squad_base_url, train_filename, prefix, 30288272L)
+    maybe_download(squad_base_url, train_filename, download_prefix, 30288272L)
 
-    train_data = data_from_json(os.path.join(prefix, train_filename))
+    train_data = data_from_json(os.path.join(download_prefix, train_filename))
 
-    train_num_questions, train_num_answers = read_write_dataset(train_data, 'train', prefix)
+    train_num_questions, train_num_answers = read_write_dataset(train_data, 'train', data_prefix)
 
     # In train we have 87k+ questions, and one answer per question.
     # The answer start range is also indicated
@@ -223,16 +228,16 @@ if __name__ == '__main__':
     # 1. Split train into train and validation into 95-5
     # 2. Shuffle train, validation
     print("Splitting the dataset into train and validation")
-    split_tier(prefix, 0.95, shuffle=True)
+    split_tier(data_prefix, 0.95, shuffle=True)
 
     print("Processed {} questions and {} answers in train".format(train_num_questions, train_num_answers))
 
     print("Downloading {}".format(dev_filename))
-    dev_dataset = maybe_download(squad_base_url, dev_filename, prefix, 4854279L)
+    dev_dataset = maybe_download(squad_base_url, dev_filename, download_prefix, 4854279L)
 
     # In dev, we have 10k+ questions, and around 3 answers per question (totaling
     # around 34k+ answers).
-    # dev_data = data_from_json(os.path.join(prefix, dev_filename))
+    # dev_data = data_from_json(os.path.join(download_prefix, dev_filename))
     # list_topics(dev_data)
-    # dev_num_questions, dev_num_answers = read_write_dataset(dev_data, 'dev', prefix)
+    # dev_num_questions, dev_num_answers = read_write_dataset(dev_data, 'dev', data_prefix)
     # print("Processed {} questions and {} answers in dev".format(dev_num_questions, dev_num_answers))
