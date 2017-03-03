@@ -19,3 +19,9 @@ a=[
 
 print a[:1:]
 
+print ("d",4,"3")[1]
+
+print "abc"[1:]
+
+
+

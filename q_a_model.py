@@ -55,12 +55,10 @@ class QAModel:
         """
         raise NotImplementedError("Each Model must re-implement this method.")
 
-    def add_prediction_op(self):
-        """Implements the core of the model that transforms a batch of input data into predictions.
+    def add_encoder_op(self):
+        raise NotImplementedError("Each Model must re-implement this method.")
 
-        Returns:
-            pred: A tensor of shape (batch_size, n_classes)
-        """
+    def add_decoder_op(self, encoded_representation):
         raise NotImplementedError("Each Model must re-implement this method.")
 
     def add_loss_op(self, pred):
@@ -117,9 +115,13 @@ class QAModel:
 
     def build(self):
         self.add_placeholders()
-        self.d_representation, self.q_representation = self.add_prediction_op()
-        # self.loss = self.add_loss_op(None)
-        # self.train_op = self.add_training_op(self.loss)
+        self.encoded_representation = self.add_encoder_op()
+        self.loss = self.add_decoder_op(self.encoded_representation)
+
+        # self.loss = self.add_loss_op(self.prediction[0])
+        # assert isinstance(self.loss, tuple)
+
+        self.train_op = self.add_training_op(self.loss)
 
 
     """

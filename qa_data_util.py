@@ -43,6 +43,7 @@ def load_dataset(type='train', plot=False):
     # and questions to FLAGS.max_question_size
     contexts, contexts_mask = clip_and_pad(contexts, FLAGS.max_document_size)
     questions, questions_mask = clip_and_pad(questions, FLAGS.max_question_size)
+    spans = clip_and_pad_span(spans, FLAGS.max_document_size-1)
 
     if plot:
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
@@ -50,6 +51,9 @@ def load_dataset(type='train', plot=False):
 
     return questions, contexts, spans
 
+def clip_and_pad_span(data, max_document_length,):
+    data = [[min(record[0],max_document_length),min(record[1],max_document_length)] for record in data]
+    return data
 
 def clip_and_pad(data, max_length, zero_vector = 0):
     mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
