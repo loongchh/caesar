@@ -31,11 +31,12 @@ tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training
 tf.app.flags.DEFINE_integer("epochs", 0, "Number of epochs to train.")
 tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
 tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
+tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")
 tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 tf.app.flags.DEFINE_string("train_dir", "train", "Training directory (default: ./train).")
 tf.app.flags.DEFINE_string("log_dir", "log", "Path to store log and flag files (default: ./log)")
 tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
-tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{vocab_dim}.npz)")
+tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{embedding_size}.npz)")
 tf.app.flags.DEFINE_string("dev_path", "data/squad/dev-v1.1.json", "Path to the JSON dev set to evaluate against (default: ./data/squad/dev-v1.1.json)")
 
 def initialize_model(session, model, train_dir):
@@ -100,7 +101,6 @@ def read_dataset(dataset, tier, vocab):
 
 
 def prepare_dev(prefix, dev_filename, vocab):
-    print("Downloading {}".format(dev_filename))
     # Don't check file size, since we could be using other datasets
     dev_dataset = maybe_download(squad_base_url, dev_filename, prefix)
 
@@ -134,23 +134,27 @@ def generate_answers(sess, model, dataset, rev_vocab):
     return answers
 
 
+def get_normalized_train_dir(train_dir):
+    """
+    Adds symlink to {train_dir} from /tmp/cs224n-squad-train to canonicalize the
+    file paths saved in the checkpoint. This allows the model to be reloaded even
+    if the location of the checkpoint files has moved, allowing usage with CodaLab.
+    This must be done on both train.py and qa_answer.py in order to work.
+    """
+    global_train_dir = '/tmp/cs224n-squad-train'
+    if os.path.exists(global_train_dir):
+        os.unlink(global_train_dir)
+    if not os.path.exists(train_dir):
+        os.makedirs(train_dir)
+    os.symlink(os.path.abspath(train_dir), global_train_dir)
+    return global_train_dir
+
+
 def main(_):
 
     vocab, rev_vocab = initialize_vocab(FLAGS.vocab_path)
 
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
-
-    global_train_dir = '/tmp/cs224n-squad-train'
-    # Adds symlink to {train_dir} from /tmp/cs224n-squad-train to canonicalize the
-    # file paths saved in the checkpoint. This allows the model to be reloaded even
-    # if the location of the checkpoint files has moved, allowing usage with CodaLab.
-    # This must be done on both train.py and qa_answer.py in order to work.
-    if not os.path.exists(FLAGS.train_dir):
-        os.makedirs(FLAGS.train_dir)
-    if os.path.exists(global_train_dir):
-        os.unlink(global_train_dir)
-    os.symlink(os.path.abspath(FLAGS.train_dir), global_train_dir)
-    train_dir = global_train_dir
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
 
     if not os.path.exists(FLAGS.log_dir):
         os.makedirs(FLAGS.log_dir)
@@ -172,12 +176,13 @@ def main(_):
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
 
-    encoder = Encoder(size=FLAGS.size, vocab_dim=FLAGS.vocab_dim)
+    encoder = Encoder(size=FLAGS.state_size, vocab_dim=FLAGS.embedding_size)
     decoder = Decoder(output_size=FLAGS.output_size)
 
-    qa = QASystem(encoder, decoder, train_dir)
+    qa = QASystem(encoder, decoder)
 
     with tf.Session() as sess:
+        train_dir = get_normalized_train_dir(FLAGS.train_dir)
         initialize_model(sess, qa, train_dir)
         answers = generate_answers(sess, qa, dataset, rev_vocab)
 

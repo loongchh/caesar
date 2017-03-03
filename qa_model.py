@@ -69,7 +69,7 @@ class Decoder(object):
         return
 
 class QASystem(object):
-    def __init__(self, encoder, decoder, train_dir, *args):
+    def __init__(self, encoder, decoder, *args):
         """
         Initializes your System
 
@@ -77,8 +77,6 @@ class QASystem(object):
         :param decoder: a decoder that you constructed in train.py
         :param args: pass in more arguments as needed
         """
-        # Save your model parameters/checkpoints here
-        self.train_dir = train_dir
 
         # ==== set up placeholder tokens ========
 
@@ -100,7 +98,7 @@ class QASystem(object):
         to assemble your reading comprehension system!
         :return:
         """
-        raise Exception("Connect all parts of your system here!")
+        raise NotImplementedError("Connect all parts of your system here!")
 
 
     def setup_loss(self):
@@ -223,7 +221,7 @@ class QASystem(object):
 
         return f1, em
 
-    def train(self, session, dataset):
+    def train(self, session, dataset, train_dir):
         """
         Implement main training loop
 
@@ -243,12 +241,13 @@ class QASystem(object):
         :param session: it should be passed in from train.py
         :param dataset: a representation of our data, in some implementations, you can
                         pass in multiple components (arguments) of one dataset to this function
+        :param train_dir: path to the directory where you should save the model checkpoint
         :return:
         """
 
         # some free code to print out number of parameters in your model
         # it's always good to check!
-        # you will also want to save your model parameters in self.train_dir
+        # you will also want to save your model parameters in train_dir
         # so that you can use your trained model to make predictions, or
         # even continue training
 
