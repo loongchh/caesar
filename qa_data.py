@@ -139,6 +139,22 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
                     tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
 
 
+def token_ids_to_data(data_path, target_path, vocabulary_path,
+                      tokenizer=None):
+    if not gfile.Exists(target_path):
+        print("Tokenizing data in %s" % data_path)
+        vocab, _ = initialize_vocabulary(vocabulary_path)
+        with gfile.GFile(data_path, mode="rb") as data_file:
+            with gfile.GFile(target_path, mode="w") as tokens_file:
+                counter = 0
+                for line in data_file:
+                    counter += 1
+                    if counter % 5000 == 0:
+                        print("tokenizing line %d" % counter)
+                    token_ids = sentence_to_token_ids(line, vocab, tokenizer)
+                    tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
+
+
 if __name__ == '__main__':
     args = setup_args()
     vocab_path = pjoin(args.vocab_dir, "vocab.dat")

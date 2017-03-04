@@ -13,40 +13,8 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
 class CoattentionModel(QAModel):
-    """
-    Implements a recursive neural network with an embedding layer and
-    single hidden layer.
-    This network will predict a sequence of labels (e.g. PER) for a
-    given token (e.g. Henry) using a featurized window around the token.
-    """
 
     def add_placeholders(self):
-        """Generates placeholder variables to represent the input tensors
-
-        These placeholders are used as inputs by the rest of the model building and will be fed
-        data during training.  Note that when "None" is in a placeholder's shape, it's flexible
-        (so we can use different batch sizes without rebuilding the model).
-
-        Adds following nodes to the computational graph
-
-        input_placeholder: Input placeholder tensor of  shape (None, self.max_length, n_features), type tf.int32
-        labels_placeholder: Labels placeholder tensor of shape (None, self.max_length), type tf.int32
-        mask_placeholder:  Mask placeholder tensor of shape (None, self.max_length), type tf.bool
-        dropout_placeholder: Dropout value placeholder (scalar), type tf.float32
-
-        TODO: Add these placeholders to self as the instance variables
-            self.input_placeholder
-            self.labels_placeholder
-            self.mask_placeholder
-            self.dropout_placeholder
-
-        HINTS:
-            - Remember to use self.max_length NOT Config.max_length
-
-        (Don't change the variable names)
-        """
-        ### YOUR CODE HERE (~4-6 lines)
-
         self.question_placeholder = tf.placeholder(tf.int32,
                                                 shape=(FLAGS.batch_size, FLAGS.max_question_size),
                                                 name="question_placeholder")
@@ -59,32 +27,8 @@ class CoattentionModel(QAModel):
         self.dropout_placeholder = tf.placeholder(tf.float32,
                                                   name="dropout_placeholder")
 
-        ### END YOUR CODE
 
     def create_feed_dict(self, question_batch, document_batch, span_batch=None, dropout=1):
-        """Creates the feed_dict for the dependency parser.
-
-        A feed_dict takes the form of:
-
-        feed_dict = {
-                <placeholder>: <tensor of values to be passed for placeholder>,
-                ....
-        }
-
-        Hint: The keys for the feed_dict should be a subset of the placeholder
-                    tensors created in add_placeholders.
-        Hint: When an argument is None, don't add it to the feed_dict.
-
-        Args:
-            inputs_batch: A batch of input data.
-            mask_batch:   A batch of mask data.
-            labels_batch: A batch of label data.
-            dropout: The dropout rate.
-        Returns:
-            feed_dict: The feed dictionary mapping from placeholders to values.
-        """
-        ### YOUR CODE (~6-10 lines)
-
         feed_dict = {
             self.question_placeholder: question_batch,
             self.document_placeholder: document_batch
@@ -96,38 +40,15 @@ class CoattentionModel(QAModel):
         if span_batch is not None:
             feed_dict[self.span_placeholder] = span_batch
 
-        ### END YOUR CODE
         return feed_dict
 
     def add_embedding(self):
-        """Adds an embedding layer that maps from input tokens (integers) to vectors and then
-        concatenates those vectors:
-
-        TODO:
-            - Create an embedding tensor and initialize it with self.pretrained_embeddings.
-            - Use the input_placeholder to index into the embeddings tensor, resulting in a
-              tensor of shape (None, max_length, n_features, embed_size).
-            - Concatenates the embeddings by reshaping the embeddings tensor to shape
-              (None, max_length, n_features * embed_size).
-
-        HINTS:
-            - You might find tf.nn.embedding_lookup useful.
-            - You can use tf.reshape to concatenate the vectors. See
-              following link to understand what -1 in a shape means.
-              https://www.tensorflow.org/api_docs/python/array_ops/shapes_and_shaping#reshape.
-
-        Returns:
-            embeddings: tf.Tensor of shape (None, max_length, n_features*embed_size)
-        """
-        ### YOUR CODE HERE (~4-6 lines)
         all_embeddings = tf.cast(
             tf.get_variable("all_embeddings", initializer=self.pretrained_embeddings, dtype=tf.float64),
             tf.float32)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
-
-        ### END YOUR CODE
         return question_embeddings, document_embeddings
 
     def add_encoder_op(self):
@@ -189,7 +110,7 @@ class CoattentionModel(QAModel):
             ),
             name="bq"
         )
-        # q_representation = tf.nn.tanh(tf.einsum('ijk,kk->ijk',q_representation, Wq) + bq)
+        q_representation = tf.nn.tanh(tf.einsum('ijk,kl->ijl',q_representation, Wq) + bq)
 
 
         assert d_representation.get_shape().as_list() == [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size], \
@@ -199,12 +120,6 @@ class CoattentionModel(QAModel):
             "questions representation are not of the right shape. Expected {}, got {}".format([FLAGS.batch_size, FLAGS.max_question_size, 2 * FLAGS.state_size], q_representation.get_shape().as_list())
 
         q_representation_transpose = tf.transpose(q_representation, perm=[0,2,1])
-        d_representation_transpose = tf.transpose(d_representation, perm=[0,2,1])
-        # return tf.shape(q_representation_transpose),tf.shape(d_representation_transpose)
-        # exit()
-
-        ###  Weirdo Tensorflow
-        # L = tf.batch_matmul( tf.transpose(d_representation,perm=[0,2,1]), q_representation)
 
         L = tf.batch_matmul(d_representation,q_representation_transpose)
 
@@ -223,8 +138,6 @@ class CoattentionModel(QAModel):
 
             initial_state_fw = cell_fw.zero_state(FLAGS.batch_size, tf.float32)
             initial_state_bw = cell_bw.zero_state(FLAGS.batch_size, tf.float32)
-
-            ## calculate document representation
 
             DCd_ = tf.transpose(DCd, [1, 0, 2])
             # Reshape to (n_steps*batch_size, n_input)
@@ -246,8 +159,6 @@ class CoattentionModel(QAModel):
         #     tf.shape(q_input,name="debug_q"),
         #     tf.shape(d_representation,name="debug_d_representation"),
         #     tf.shape(q_representation, name="debug_q_representation"),
-        #     tf.shape(d_representation_transpose,name="debug_d_representation_transpose"),
-        #     tf.shape(q_representation_transpose,name="debug_q_representation_transpose" ),
         #     tf.shape(L, name="debug_L"),
         #     tf.shape(Aq, name="debug_Aq"),
         #     tf.shape(Ad, name="debug_Ad"),
@@ -259,7 +170,7 @@ class CoattentionModel(QAModel):
         # )
         return encoded_representation,
 
-    def add_decoder_op(self, encoded_representation):
+    def add_decoder_op(self, encoded_representation, predict_only = False):
         assert isinstance(encoded_representation, tuple)
         batch_range = tf.range(FLAGS.batch_size)
         zeros = tf.zeros(FLAGS.batch_size, dtype=tf.int32)
@@ -305,6 +216,7 @@ class CoattentionModel(QAModel):
             xi = tf.contrib.layers.xavier_initializer()
             W3E = tf.get_variable(initializer=xi,shape=[2* FLAGS.state_size,1, FLAGS.pooling_size],name="W3E")
             b3E = tf.Variable(initial_value=tf.zeros_initializer(shape=(1,FLAGS.pooling_size)),name="b3E")
+            self.variable_summaries(W1E)
 
 
             for iter in range(4):
@@ -402,72 +314,26 @@ class CoattentionModel(QAModel):
         #            tf.shape(BETA, name="debug_beta"),
         #            tf.shape(end_indices, name="debug_end_indices"),
         #         ) + encoded_representation
-
         return loss/8, tf.stack([start_indices, end_indices], 1)
 
-
-
-    def add_loss_op(self, preds):
-        """Adds Ops for the loss function to the computational graph.
-
-        TODO: Compute averaged cross entropy loss for the predictions.
-        Importantly, you must ignore the loss for any masked tokens.
-
-        Hint: You might find tf.boolean_mask useful to mask the losses on masked tokens.
-        Hint: You can use tf.nn.sparse_softmax_cross_entropy_with_logits to simplify your
-                    implementation. You might find tf.reduce_mean useful.
-        Args:
-            pred: A tensor of shape (batch_size, max_length, n_classes) containing the output of the neural
-                  network before the softmax layer.
-        Returns:
-            loss: A 0-d tensor (scalar)
-        """
-        ### YOUR CODE HERE (~2-4 lines)
-
-        loss = tf.reduce_mean(tf.nn.l2_loss(preds-self.span_placeholder))
-
-        ### END YOUR CODE
-        return loss,
+    def variable_summaries(self,var):
+        """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
+        with tf.name_scope('summaries'):
+            mean = tf.reduce_mean(var)
+            tf.summary.scalar('mean', mean)
+            with tf.name_scope('stddev'):
+                stddev = tf.sqrt(tf.reduce_mean(tf.square(var - mean)))
+            tf.summary.scalar('stddev', stddev)
+            tf.summary.scalar('max', tf.reduce_max(var))
+            tf.summary.scalar('min', tf.reduce_min(var))
+            tf.summary.histogram('histogram', var)
 
     def add_training_op(self, loss):
-        """Sets up the training Ops.
-
-        Creates an optimizer and applies the gradients to all trainable variables.
-        The Op returned by this function is what must be passed to the
-        `sess.run()` call to cause the model to train. See
-
-        https://www.tensorflow.org/versions/r0.7/api_docs/python/train.html#Optimizer
-
-        for more information.
-
-        Use tf.train.AdamOptimizer for this model.
-        Calling optimizer.minimize() will return a train_op object.
-
-        Args:
-            loss: Loss tensor, from cross_entropy_loss.
-        Returns:
-            train_op: The Op for training.
-        """
-        ### YOUR CODE HERE (~1-2 lines)
-
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
 
-        ### END YOUR CODE
-        return (train_op,)+ loss
+        return (train_op,) + loss
 
     def predict_on_batch(self, sess, question_batch, document_batch):
-        # feed = self.create_feed_dict(
-        #     question_batch = question_batch,
-        #     document_batch= document_batch
-        # )
-        # def arr(*args):
-        #     return list(args)
-        # pred = sess.run( arr(*self.prediction), feed_dict=feed)
-        # for i, tensor in enumerate(self.prediction):
-        #     if tensor.name.startswith("debug_"):
-        #         logger.debug("Shape of {} == {}".format(tensor.name[6:], pred[i]))
-        # # print pred[0]
-        # return pred
         raise NotImplementedError
 
 
