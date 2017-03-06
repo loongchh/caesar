@@ -4,6 +4,7 @@ import numpy as np
 from q_a_model import QAModel
 import qa_data_util as du
 import parse_args
+import evaluate
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -170,7 +171,7 @@ class CoattentionModel(QAModel):
         # )
         return encoded_representation,
 
-    def add_decoder_op(self, encoded_representation, predict_only = False):
+    def add_decoder_op(self, encoded_representation, predict_only=False):
         assert isinstance(encoded_representation, tuple)
         batch_range = tf.range(FLAGS.batch_size)
         zeros = tf.zeros(FLAGS.batch_size, dtype=tf.int32)
@@ -314,7 +315,11 @@ class CoattentionModel(QAModel):
         #            tf.shape(BETA, name="debug_beta"),
         #            tf.shape(end_indices, name="debug_end_indices"),
         #         ) + encoded_representation
-        return loss/8, tf.stack([start_indices, end_indices], 1)
+
+        loss = loss/8
+        predicted_answer_span = tf.stack([start_indices, end_indices], 1)
+        return loss, predicted_answer_span
+
 
     def variable_summaries(self,var):
         """Attach a lot of summaries to a Tensor (for TensorBoard visualization)."""
@@ -333,9 +338,17 @@ class CoattentionModel(QAModel):
 
         return (train_op,) + loss
 
-    def predict_on_batch(self, sess, question_batch, document_batch):
-        raise NotImplementedError
-
+    def predict_on_batch(self, sess, question_batch, document_batch, span_batch):
+        feed = self.create_feed_dict(
+            question_batch = question_batch,
+            document_batch= document_batch,
+            span_batch=span_batch
+        )
+        def arr(*args):
+            return list(args)
+        loss = sess.run( arr(*self.loss), feed_dict=feed)
+        pred = loss[1]
+        return pred
 
     def train_on_batch(self, sess, question_batch, document_batch, span_batch):
         feed = self.create_feed_dict(
@@ -354,6 +367,10 @@ class CoattentionModel(QAModel):
         # print pred[0]
         return loss, pred
 
+
+
+
+
     def __init__(self, pretrained_embeddings):
         self.pretrained_embeddings = pretrained_embeddings
 
@@ -365,11 +382,38 @@ class CoattentionModel(QAModel):
         self.build()
 
 
-def do_test2():
+def evaluate_single(document, ground_truth_span, predicted_span, rev_vocab):
+        f1 = 0
+        em = False
+
+        ## Reverse the indices if start is greater than end, SHOULDN'T Happen
+        if predicted_span[0] > predicted_span[1]:
+            a = predicted_span[0]
+            predicted_span[0]=predicted_span[1]
+            predicted_span[1] = a
+
+        ground_truth_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
+                                if int(ground_truth_span[0]) <= int(index) <= int(ground_truth_span[1])]
+
+        predicted_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
+                                if int(predicted_span[0]) <= int(index) <= int(predicted_span[1])]
+
+        predicted = " ".join(predicted_tokens)
+        ground_truth = " ".join(ground_truth_tokens)
+        f1 = evaluate.f1_score(predicted, ground_truth)
+        em = evaluate.exact_match_score(predicted, ground_truth)
+        return f1, em
+
+
+
+
+def train():
     embeddings = du.load_embeddings()
-    # train_questions, train_contexts, train_spans = du.load_dataset(type = "train")
+    train_questions, train_contexts, train_spans = du.load_dataset(type = "train")
     val_questions, val_contexts, val_spans = du.load_dataset(type = "val")
 
+    vocab,rev_vocab = du.initialize_vocab()
+    # print rev_vocab[1000]
 
     with tf.Graph().as_default():
 
@@ -388,19 +432,49 @@ def do_test2():
                 run_metadata = tf.RunMetadata()
                 train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
                 logger.info("Epoch %d out of %d", epoch + 1, 1)
-                for i in range(int(len(val_questions)/FLAGS.batch_size)):
+                ### Training
+                for i in range(int(len(train_questions)/FLAGS.batch_size)):
+                    start = i*FLAGS.batch_size
+                    end = (i+1)*FLAGS.batch_size
                     loss, pred = model.train_on_batch(
                         session,
-                        val_questions[i*FLAGS.batch_size : (i+1)*FLAGS.batch_size],
-                        val_contexts[i*FLAGS.batch_size : (i+1)*FLAGS.batch_size],
-                        val_spans[i*FLAGS.batch_size : (i+1)*FLAGS.batch_size],
+                        train_questions[start: end],
+                        train_contexts[start: end],
+                        train_spans[start: end],
                     )
-                    print i, loss, pred, val_spans[i*FLAGS.batch_size : (i+1)*FLAGS.batch_size]
+                    print i, loss
+                    if i >1000:
+                        break
+
+
+                ### Evaluation
+                f1_sum = 0
+                em_sum = 0
+                for i in range(int(len(val_questions)/FLAGS.batch_size)):
+                    start = i*FLAGS.batch_size
+                    end = (i+1)*FLAGS.batch_size
+                    pred = model.predict_on_batch(
+                        session,
+                        val_questions[start: end],
+                        val_contexts[start: end],
+                        val_spans[start: end],
+                    )
+                    for j in range(start, end):
+                        if int(val_spans[j][0]) == int(val_spans[j][1]) and int(val_spans[j][1]) == FLAGS.max_document_size -1:
+                            print j, "skipped"
+                            continue
+                        f1, em = evaluate_single(val_contexts[j], val_spans[j], pred[j%FLAGS.batch_size],rev_vocab)
+                        f1_sum += f1
+                        em_sum += 1. if em else 0.
+                        print j, f1, em
+
+                logger.info("Evaluation: F1 Score: {}. EM Score: {}".format(f1_sum/len(val_questions), em_sum/len(val_questions)))
             train_writer.close()
 
     logger.info("Model did not crash!")
     logger.info("Passed!")
 
+
 if __name__ == "__main__":
     parse_args.parse_args()
-    do_test2()
+    train()

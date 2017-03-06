@@ -1,3 +1,5 @@
+for j in range(2,5):
+    print j
 def test(a,b,c,d):
     print b
     b = [1]
