@@ -1,6 +1,7 @@
 import logging
 import tensorflow as tf
 from model import QAModel
+import util
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -11,6 +12,9 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
 class CoattentionModel(QAModel):
+
+    def __init__(self, embeddings, debug_shape=False):
+        super(CoattentionModel, self).__init__(embeddings, debug_shape)
 
     def add_placeholders(self):
         self.question_placeholder = tf.placeholder(tf.int32,
@@ -29,12 +33,11 @@ class CoattentionModel(QAModel):
     def create_feed_dict(self, question_batch, document_batch, span_batch=None, dropout=1):
         feed_dict = {
             self.question_placeholder: question_batch,
-            self.document_placeholder: document_batch
+            self.document_placeholder: document_batch,
         }
 
         if dropout is not None:
             feed_dict[self.dropout_placeholder] = dropout
-
         if span_batch is not None:
             feed_dict[self.span_placeholder] = span_batch
 
@@ -49,7 +52,7 @@ class CoattentionModel(QAModel):
 
         return question_embeddings, document_embeddings
 
-    def add_encoder_op(self):
+    def add_encoder_op(self, debug_shape=False):
         q_input,d_input = self.add_embedding()
         dropout_rate = self.dropout_placeholder
 
@@ -151,31 +154,31 @@ class CoattentionModel(QAModel):
                                                    )
             encoded_representation = tf.transpose(output, perm=[1,0,2], name="encoded_representation")
 
-        # return (
-        #     encoded_representation,
-        #     tf.shape(d_input,name="debug_d"),
-        #     tf.shape(q_input,name="debug_q"),
-        #     tf.shape(d_representation,name="debug_d_representation"),
-        #     tf.shape(q_representation, name="debug_q_representation"),
-        #     tf.shape(L, name="debug_L"),
-        #     tf.shape(Aq, name="debug_Aq"),
-        #     tf.shape(Ad, name="debug_Ad"),
-        #     tf.shape(Cq, name="debug_Cq"),
-        #     tf.shape(QCq, name="debug_QCq"),
-        #     tf.shape(Cd, name="debug_Cd"),
-        #     tf.shape(DCd, name="debug_DCd"),
-        #     tf.shape(encoded_representation, name="debug_encoded_representation")
-        # )
-        return encoded_representation,
+        if debug_shape:
+            return (
+                encoded_representation,
+                tf.shape(d_input,name="debug_d"),
+                tf.shape(q_input,name="debug_q"),
+                tf.shape(d_representation,name="debug_d_representation"),
+                tf.shape(q_representation, name="debug_q_representation"),
+                tf.shape(L, name="debug_L"),
+                tf.shape(Aq, name="debug_Aq"),
+                tf.shape(Ad, name="debug_Ad"),
+                tf.shape(Cq, name="debug_Cq"),
+                tf.shape(QCq, name="debug_QCq"),
+                tf.shape(Cd, name="debug_Cd"),
+                tf.shape(DCd, name="debug_DCd"),
+                tf.shape(encoded_representation, name="debug_encoded_representation")
+            )
 
-    def add_decoder_op(self, encoded_representation, predict_only=False):
+        return (encoded_representation, )
+
+    def add_decoder_op(self, encoded_representation, debug_shape=False):
         assert isinstance(encoded_representation, tuple)
         batch_range = tf.range(FLAGS.batch_size)
         zeros = tf.zeros(FLAGS.batch_size, dtype=tf.int32)
         ones = tf.ones(FLAGS.batch_size, dtype=tf.int32)
         U = encoded_representation[0]
-
-        loss = tf.zeros([1])
 
         with tf.variable_scope("LSTM"):
             cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
@@ -188,36 +191,36 @@ class CoattentionModel(QAModel):
             WdS = tf.get_variable(initializer=xi, shape=[5*FLAGS.state_size, FLAGS.state_size],  name="WdS",) # 5l * l
 
             xi = tf.contrib.layers.xavier_initializer()
-            W1S = tf.get_variable(initializer=xi, shape=[3*FLAGS.state_size,FLAGS.state_size, FLAGS.pooling_size],name="W1S")   # 3l X l X p
-            b1S = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.pooling_size)),name="b1S")
+            W1S = tf.get_variable(initializer=xi, shape=[3*FLAGS.state_size,FLAGS.state_size, FLAGS.coattention_pooling_size],name="W1S")   # 3l X l X p
+            b1S = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.coattention_pooling_size)),name="b1S")
 
             xi = tf.contrib.layers.xavier_initializer()
-            W2S = tf.get_variable(initializer=xi,shape=(FLAGS.state_size,FLAGS.state_size, FLAGS.pooling_size),name="W2S")  # l X l X p
-            b2S = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.pooling_size)),name="b2S")
+            W2S = tf.get_variable(initializer=xi,shape=(FLAGS.state_size,FLAGS.state_size, FLAGS.coattention_pooling_size),name="W2S")  # l X l X p
+            b2S = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.coattention_pooling_size)),name="b2S")
 
             xi = tf.contrib.layers.xavier_initializer()
-            W3S = tf.get_variable(initializer=xi,shape=[2* FLAGS.state_size,1, FLAGS.pooling_size],name="W3S")
-            b3S = tf.Variable(initial_value=tf.zeros_initializer(shape=(1,FLAGS.pooling_size)),name="b3S")
+            W3S = tf.get_variable(initializer=xi,shape=[2* FLAGS.state_size,1, FLAGS.coattention_pooling_size],name="W3S")
+            b3S = tf.Variable(initial_value=tf.zeros_initializer(shape=(1,FLAGS.coattention_pooling_size)),name="b3S")
 
 
             xi = tf.contrib.layers.xavier_initializer()
             WdE = tf.get_variable(initializer=xi, shape=[5*FLAGS.state_size, FLAGS.state_size],  name="WdE",) # 5l * l
 
             xi = tf.contrib.layers.xavier_initializer()
-            W1E = tf.get_variable(initializer=xi, shape=[3*FLAGS.state_size,FLAGS.state_size, FLAGS.pooling_size],name="W1E")   # 3l X l X p
-            b1E = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.pooling_size)),name="b1E")
+            W1E = tf.get_variable(initializer=xi, shape=[3*FLAGS.state_size,FLAGS.state_size, FLAGS.coattention_pooling_size],name="W1E")   # 3l X l X p
+            b1E = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.coattention_pooling_size)),name="b1E")
 
             xi = tf.contrib.layers.xavier_initializer()
-            W2E = tf.get_variable(initializer=xi,shape=(FLAGS.state_size,FLAGS.state_size, FLAGS.pooling_size),name="W2E")  # l X l X p
-            b2E = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.pooling_size)),name="b2E")
+            W2E = tf.get_variable(initializer=xi,shape=(FLAGS.state_size,FLAGS.state_size, FLAGS.coattention_pooling_size),name="W2E")  # l X l X p
+            b2E = tf.Variable(initial_value=tf.zeros_initializer(shape=(FLAGS.state_size,FLAGS.coattention_pooling_size)),name="b2E")
 
             xi = tf.contrib.layers.xavier_initializer()
-            W3E = tf.get_variable(initializer=xi,shape=[2* FLAGS.state_size,1, FLAGS.pooling_size],name="W3E")
-            b3E = tf.Variable(initial_value=tf.zeros_initializer(shape=(1,FLAGS.pooling_size)),name="b3E")
+            W3E = tf.get_variable(initializer=xi,shape=[2* FLAGS.state_size,1, FLAGS.coattention_pooling_size],name="W3E")
+            b3E = tf.Variable(initial_value=tf.zeros_initializer(shape=(1,FLAGS.coattention_pooling_size)),name="b3E")
             self.variable_summaries(W1E)
 
 
-            for iter in range(4):
+            for iter in range(1):
                 if iter > 0:
                     tf.get_variable_scope().reuse_variables()
 
@@ -246,10 +249,6 @@ class CoattentionModel(QAModel):
                     [FLAGS.batch_size, FLAGS.max_document_size]
                 )
 
-                loss += tf.reduce_mean(
-                    tf.nn.sparse_softmax_cross_entropy_with_logits(tf.nn.softmax(ALPHA), self.span_placeholder[:,0])
-                )
-
                 start_indices = tf.cast(tf.argmax(ALPHA, axis=1), dtype=tf.int32)
                 us = tf.gather_nd(U,tf.stack([batch_range, start_indices],1))
 
@@ -274,48 +273,70 @@ class CoattentionModel(QAModel):
                     tf.reduce_max(W3E_M1E_M2E +b3E, axis=3),
                     [FLAGS.batch_size, FLAGS.max_document_size]
                 )
-                loss += tf.reduce_mean(
-                    tf.nn.sparse_softmax_cross_entropy_with_logits(tf.nn.softmax(BETA), self.span_placeholder[:,1])
-                )
 
                 end_indices = tf.cast(tf.argmax(BETA, axis=1), dtype=tf.int32)
                 ue = tf.gather_nd(U,tf.stack([batch_range, end_indices],1))
 
-        # return (
-        #            loss,
-        #            tf.shape(U, name="debug_U"),
-        #            tf.shape(h, name="debug_h"),
-        #            tf.shape(us, name="debug_us"),
-        #            tf.shape(ue, name="debug_ue"),
-        #            tf.shape(se, name="debug_se"),
-        #            tf.shape(hse, name="debug_hse"),
-        #            tf.shape(rS, name="debug_rS"),
-        #            tf.shape(RS, name="debug_RS"),
-        #            tf.shape(URS, name="debug_URS"),
-        #            tf.shape(W1S_URS, name="debug_W1S_URS"),
-        #            tf.shape(M1S, name="debug_M1S"),
-        #            tf.shape(W2S_M1S, name="debug_W2S_M1S"),
-        #            tf.shape(M2S, name="debug_M2S"),
-        #            tf.shape(M1S_M2S, name="debug_M1S_M2S"),
-        #            tf.shape(W3S_M1S_M2S, name="debug_W3_M1S_M2S"),
-        #            tf.shape(ALPHA, name="debug_ALPHA"),
-        #            tf.shape(start_indices, name="debug_start_indices"),
-        #            tf.shape(rE, name="debug_rE"),
-        #            tf.shape(RE, name="debug_RE"),
-        #            tf.shape(URE, name="debug_URE"),
-        #            tf.shape(W1E_URE, name="debug_W1E_URE"),
-        #            tf.shape(M1E, name="debug_M1E"),
-        #            tf.shape(W2E_M1E, name="debug_W2E_M1E"),
-        #            tf.shape(M2E, name="debug_M2E"),
-        #            tf.shape(M1E_M2E, name="debug_M1E_M2E"),
-        #            tf.shape(W3E_M1E_M2E, name="debug_W3_M1E_M2E"),
-        #            tf.shape(BETA, name="debug_beta"),
-        #            tf.shape(end_indices, name="debug_end_indices"),
-        #         ) + encoded_representation
-
-        loss = loss/8
         predicted_answer_span = tf.stack([start_indices, end_indices], 1)
-        return loss, predicted_answer_span
+
+        if debug_shape:
+            decoded_representation= (
+                       predicted_answer_span,
+                       ALPHA,
+                       BETA,
+                       tf.shape(U, name="debug_U"),
+                       tf.shape(h, name="debug_h"),
+                       tf.shape(us, name="debug_us"),
+                       tf.shape(ue, name="debug_ue"),
+                       tf.shape(se, name="debug_se"),
+                       tf.shape(hse, name="debug_hse"),
+                       tf.shape(rS, name="debug_rS"),
+                       tf.shape(RS, name="debug_RS"),
+                       tf.shape(URS, name="debug_URS"),
+                       tf.shape(W1S_URS, name="debug_W1S_URS"),
+                       tf.shape(M1S, name="debug_M1S"),
+                       tf.shape(W2S_M1S, name="debug_W2S_M1S"),
+                       tf.shape(M2S, name="debug_M2S"),
+                       tf.shape(M1S_M2S, name="debug_M1S_M2S"),
+                       tf.shape(W3S_M1S_M2S, name="debug_W3_M1S_M2S"),
+                       tf.shape(ALPHA, name="debug_ALPHA"),
+                       tf.shape(start_indices, name="debug_start_indices"),
+                       tf.shape(rE, name="debug_rE"),
+                       tf.shape(RE, name="debug_RE"),
+                       tf.shape(URE, name="debug_URE"),
+                       tf.shape(W1E_URE, name="debug_W1E_URE"),
+                       tf.shape(M1E, name="debug_M1E"),
+                       tf.shape(W2E_M1E, name="debug_W2E_M1E"),
+                       tf.shape(M2E, name="debug_M2E"),
+                       tf.shape(M1E_M2E, name="debug_M1E_M2E"),
+                       tf.shape(W3E_M1E_M2E, name="debug_W3_M1E_M2E"),
+                       tf.shape(BETA, name="debug_beta"),
+                       tf.shape(end_indices, name="debug_end_indices"),
+            )
+        else:
+            decoded_representation = (
+            predicted_answer_span,
+            ALPHA,
+            BETA
+        )
+
+        return decoded_representation + encoded_representation
+
+    def add_loss_op(self, decoded_representation, debug_shape=False):
+        assert isinstance(decoded_representation, tuple)
+        ALPHA = decoded_representation[1]
+        BETA = decoded_representation[2]
+
+        ## LOSS should be calculated in add_loss_op
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(tf.nn.softmax(ALPHA), self.span_placeholder[:,0]))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(tf.nn.softmax(BETA), self.span_placeholder[:,1]))
+        return (L1+L2, ) + decoded_representation
+
+
+    def add_training_op(self, loss, debug_shape=False):
+        train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
+
+        return (train_op,) + loss
 
 
     def variable_summaries(self,var):
@@ -330,46 +351,4 @@ class CoattentionModel(QAModel):
             tf.summary.scalar('min', tf.reduce_min(var))
             tf.summary.histogram('histogram', var)
 
-    def add_training_op(self, loss):
-        train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
 
-        return (train_op,) + loss
-
-    def predict_on_batch(self, sess, question_batch, document_batch, span_batch):
-        feed = self.create_feed_dict(
-            question_batch = question_batch,
-            document_batch= document_batch,
-            span_batch=span_batch
-        )
-        def arr(*args):
-            return list(args)
-        loss = sess.run( arr(*self.loss), feed_dict=feed)
-        pred = loss[1]
-        return pred
-
-    def train_on_batch(self, sess, question_batch, document_batch, span_batch):
-        feed = self.create_feed_dict(
-            question_batch = question_batch,
-            document_batch= document_batch,
-            span_batch=span_batch
-        )
-        def arr(*args):
-            return list(args)
-        train_op = sess.run( arr(*self.train_op), feed_dict=feed)
-        loss = train_op[1]
-        pred = train_op[2]
-        # for i, tensor in enumerate(self.prediction):
-        #     if tensor.name.startswith("debug_"):
-        #         logger.debug("Shape of {} == {}".format(tensor.name[6:], pred[i]))
-        # print pred[0]
-        return loss, pred
-
-    def __init__(self, pretrained_embeddings):
-        self.pretrained_embeddings = pretrained_embeddings
-
-        # Defining placeholders.
-        self.question_placeholder = None
-        self.document_placeholder = None
-        self.span_placeholder = None
-        self.dropout_placeholder = None
-        self.build()
