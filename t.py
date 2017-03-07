@@ -85,7 +85,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
 
 def train():
     embeddings = du.load_embeddings()
-    train_data = du.load_dataset(type = "val")
+    train_data = du.load_dataset(type = "train")
     val_data = du.load_dataset(type = "val")
 
     vocab,rev_vocab = du.initialize_vocab()
