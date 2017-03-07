@@ -63,8 +63,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
         pred = model.predict_on_batch(
             session,
             val_data['q'][start: end],
-            val_data['c'][start: end],
-            val_data['s'][start: end],
+            val_data['c'][start: end]
         )
         for j in range(start, end):
             if int(val_data['s'][j][0]) == int(val_data['s'][j][1]) and int(val_data['s'][j][1]) == FLAGS.max_document_size -1:
