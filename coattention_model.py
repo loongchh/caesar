@@ -1,10 +1,7 @@
-import logging, time
+import logging
 import tensorflow as tf
-import numpy as np
-from q_a_model import QAModel
-import qa_data_util as du
-import parse_args
-import evaluate
+from model import QAModel
+
 FLAGS = tf.app.flags.FLAGS
 
 
@@ -367,10 +364,6 @@ class CoattentionModel(QAModel):
         # print pred[0]
         return loss, pred
 
-
-
-
-
     def __init__(self, pretrained_embeddings):
         self.pretrained_embeddings = pretrained_embeddings
 
@@ -380,101 +373,3 @@ class CoattentionModel(QAModel):
         self.span_placeholder = None
         self.dropout_placeholder = None
         self.build()
-
-
-def evaluate_single(document, ground_truth_span, predicted_span, rev_vocab):
-        f1 = 0
-        em = False
-
-        ## Reverse the indices if start is greater than end, SHOULDN'T Happen
-        if predicted_span[0] > predicted_span[1]:
-            a = predicted_span[0]
-            predicted_span[0]=predicted_span[1]
-            predicted_span[1] = a
-
-        ground_truth_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-                                if int(ground_truth_span[0]) <= int(index) <= int(ground_truth_span[1])]
-
-        predicted_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-                                if int(predicted_span[0]) <= int(index) <= int(predicted_span[1])]
-
-        predicted = " ".join(predicted_tokens)
-        ground_truth = " ".join(ground_truth_tokens)
-        f1 = evaluate.f1_score(predicted, ground_truth)
-        em = evaluate.exact_match_score(predicted, ground_truth)
-        return f1, em
-
-
-
-
-def train():
-    embeddings = du.load_embeddings()
-    train_questions, train_contexts, train_spans = du.load_dataset(type = "train")
-    val_questions, val_contexts, val_spans = du.load_dataset(type = "val")
-
-    vocab,rev_vocab = du.initialize_vocab()
-    # print rev_vocab[1000]
-
-    with tf.Graph().as_default():
-
-        logger.info("Building model...",)
-        start = time.time()
-        model = CoattentionModel(embeddings)
-        logger.info("took %.2f seconds", time.time() - start)
-        init = tf.global_variables_initializer()
-        saver = None
-
-        with tf.Session() as session:
-            train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
-            session.run(init)
-
-            for epoch in range(1):
-                run_metadata = tf.RunMetadata()
-                train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
-                logger.info("Epoch %d out of %d", epoch + 1, 1)
-                ### Training
-                for i in range(int(len(train_questions)/FLAGS.batch_size)):
-                    start = i*FLAGS.batch_size
-                    end = (i+1)*FLAGS.batch_size
-                    loss, pred = model.train_on_batch(
-                        session,
-                        train_questions[start: end],
-                        train_contexts[start: end],
-                        train_spans[start: end],
-                    )
-                    print i, loss
-                    if i >1000:
-                        break
-
-
-                ### Evaluation
-                f1_sum = 0
-                em_sum = 0
-                for i in range(int(len(val_questions)/FLAGS.batch_size)):
-                    start = i*FLAGS.batch_size
-                    end = (i+1)*FLAGS.batch_size
-                    pred = model.predict_on_batch(
-                        session,
-                        val_questions[start: end],
-                        val_contexts[start: end],
-                        val_spans[start: end],
-                    )
-                    for j in range(start, end):
-                        if int(val_spans[j][0]) == int(val_spans[j][1]) and int(val_spans[j][1]) == FLAGS.max_document_size -1:
-                            print j, "skipped"
-                            continue
-                        f1, em = evaluate_single(val_contexts[j], val_spans[j], pred[j%FLAGS.batch_size],rev_vocab)
-                        f1_sum += f1
-                        em_sum += 1. if em else 0.
-                        print j, f1, em
-
-                logger.info("Evaluation: F1 Score: {}. EM Score: {}".format(f1_sum/len(val_questions), em_sum/len(val_questions)))
-            train_writer.close()
-
-    logger.info("Model did not crash!")
-    logger.info("Passed!")
-
-
-if __name__ == "__main__":
-    parse_args.parse_args()
-    train()

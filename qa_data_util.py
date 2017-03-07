@@ -50,7 +50,7 @@ def load_dataset(type='train', plot=False):
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
 
-    return questions, contexts, spans
+    return {'q':questions, 'c': contexts, 's': spans}
 
 def clip_and_pad_span(data, max_document_length,):
     data = [[min(int(record[0]),max_document_length), min(int(record[1]),max_document_length)] for record in data]
@@ -99,5 +99,5 @@ if __name__ == '__main__':
     parse_args.parse_args()
     test_clip_and_pad()
     embeddings = load_embeddings()
-    train_questions, train_contexts, train_spans = load_dataset(type = "train", plot=True)
-    val_questions, val_contexts, val_spans = load_dataset(type = "val", plot=True)
+    train_data = load_dataset(type = "train", plot=True)
+    val_data = load_dataset(type = "val", plot=True)
