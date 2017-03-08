@@ -20,6 +20,9 @@ class BaselineModel(QAModel):
         self.question_placeholder = tf.placeholder(tf.int32,
                                                 shape=(FLAGS.batch_size, None),
                                                 name="question_placeholder")
+        self.question_mask_placeholder = tf.placeholder(tf.int32,
+                                                shape=(FLAGS.batch_size, None),
+                                                name="question_placeholder")
         self.document_placeholder = tf.placeholder(tf.int32,
                                                 shape=(FLAGS.batch_size, None),
                                                 name="document_placeholder")

@@ -79,16 +79,12 @@ def filter_data(questions, contexts, spans):
     )
 
 
-
 def padding(data, max_length, zero_vector=0):
     seq = [len(record) for record in data]
     mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
     data = [record[:max_length] + (max_length - len(record))*[zero_vector] for record in data]
 
     return data, mask,seq
-
-# def test_clip_and_pad():
-#     print clip_and_pad([[0,1,2,3], [4,5,6],[1],[]], 2)
 
 
 def plot_histogram(data,name ):
@@ -118,7 +114,6 @@ def initialize_vocab():
         return vocab, rev_vocab
     else:
         raise ValueError("Vocabulary file %s not found.", vocab_path)
-
 
 
 if __name__ == '__main__':
