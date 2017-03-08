@@ -81,7 +81,11 @@ def filter_data(questions, contexts, spans):
     )
 
 def sparse_span_matrix(span):
-    return [[int(s[0]), (int(s[1])-int(s[0]))* FLAGS.max_document_size + int(s[1])]for s in span]
+    def fun(s,e):
+        doc_size = FLAGS.max_document_size
+        return [e, (s-e)*doc_size + s] if s > e else [s, (e-s)*doc_size + e]
+
+    return [fun(int(s[0]), int(s[1])) for s in span]
 
 
 def padding(data, max_length, zero_vector=0):
