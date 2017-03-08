@@ -24,17 +24,20 @@ class QAModel(object):
         self.loss = self.add_loss_op(self.decoded_representation, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
+    def create_feed_dict(self, question_batch, document_batch, span_batch=None, dropout=1):
+        raise NotImplementedError
+
     def add_encoder_op(self, debug_shape=False):
         raise NotImplementedError
 
     def add_decoder_op(self, encoded_representation, debug_shape=False):
-        raise NotImplementedError
+        return encoded_representation
 
     def add_loss_op(self, decoded_representation, debug_shape=False):
-        raise NotImplementedError
+        return decoded_representation
 
     def add_training_op(self, loss, debug_shape=False):
-        raise NotImplementedError
+        return loss
 
 
 ## Execution Methods ------------------------------------------

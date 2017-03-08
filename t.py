@@ -8,6 +8,7 @@ from util import Progbar
 FLAGS = tf.app.flags.FLAGS
 
 from coattention_model import CoattentionModel
+from baseline_model import BaselineModel
 
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
@@ -84,11 +85,14 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
 
 
 def train():
+    vocab,rev_vocab = du.initialize_vocab()
+    # print vocab['<pad>']
+
     embeddings = du.load_embeddings()
     train_data = du.load_dataset(type = "train")
     val_data = du.load_dataset(type = "val")
 
-    vocab,rev_vocab = du.initialize_vocab()
+
 
     with tf.Graph().as_default():
 
@@ -132,7 +136,7 @@ def debug_shape():
 
         logger.info("Building model for Debugging Shape...")
         start = time.time()
-        model = CoattentionModel(embeddings, debug_shape=True)
+        model = BaselineModel(embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
 
@@ -151,4 +155,4 @@ def debug_shape():
 if __name__ == "__main__":
     parse_args.parse_args()
     debug_shape()
-    train()
+    # train()

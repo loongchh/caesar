@@ -39,30 +39,56 @@ def load_dataset(type='train', plot=False):
         plot_histogram(questions, "{}-questions".format(type))
         plot_histogram(contexts, "{}-contexts".format(type))
 
-    # Truncate context paragraph to be of size FLAGS.max_document_size,
-    # and questions to FLAGS.max_question_size
-    contexts, contexts_mask = clip_and_pad(contexts, FLAGS.max_document_size)
-    questions, questions_mask = clip_and_pad(questions, FLAGS.max_question_size)
+    questions, contexts,spans = filter_data(questions, contexts, spans)
 
-    spans = clip_and_pad_span(spans, FLAGS.max_document_size-1)
+    logger.debug("filtered {} data, new size {}".format(type, len(questions)))
+    if plot:
+        plot_histogram(contexts, "{}-contexts-filtered".format(type))
+        plot_histogram(questions, "{}-questions-filtered".format(type))
+
+
+    questions, questions_mask, questions_seq = padding(questions, 15)
+    contexts, contexts_mask, contexts_seq = padding(contexts, 120)
 
     if plot:
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
 
-    return {'q':questions, 'c': contexts, 's': spans}
-
-def clip_and_pad_span(data, max_document_length,):
-    data = [[min(int(record[0]),max_document_length), min(int(record[1]),max_document_length)] for record in data]
+    data = {
+        'q': questions,
+        'q_m': questions_mask,
+        'q_s': questions_seq,
+        'c': contexts,
+        'c_m': contexts_mask,
+        'c_s': contexts_seq,
+        's': spans}
     return data
 
-def clip_and_pad(data, max_length, zero_vector = 0):
+
+def filter_data(questions, contexts, spans):
+
+    def filter(q_len, c_len):
+        return 5 < q_len <= 15 and 80 < c_len <= 120
+
+    indices = [i for i, q in enumerate(questions) if filter(len(q), len(contexts[i])) ]
+
+    return (
+        [questions[i] for i in indices],
+        [contexts[i] for i in indices],
+        [spans[i] for i in indices]
+    )
+
+
+
+def padding(data, max_length, zero_vector=0):
+    seq = [len(record) for record in data]
     mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
     data = [record[:max_length] + (max_length - len(record))*[zero_vector] for record in data]
-    return data, mask
 
-def test_clip_and_pad():
-    print clip_and_pad([[0,1,2,3], [4,5,6],[1],[]], 2)
+    return data, mask,seq
+
+# def test_clip_and_pad():
+#     print clip_and_pad([[0,1,2,3], [4,5,6],[1],[]], 2)
 
 
 def plot_histogram(data,name ):
@@ -97,7 +123,7 @@ def initialize_vocab():
 
 if __name__ == '__main__':
     parse_args.parse_args()
-    test_clip_and_pad()
+    # test_clip_and_pad()
     embeddings = load_embeddings()
     train_data = load_dataset(type = "train", plot=True)
     val_data = load_dataset(type = "val", plot=True)
