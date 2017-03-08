@@ -6,7 +6,7 @@ def parse_args():
     tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
     tf.app.flags.DEFINE_integer("batch_size", 10, "Batch size to use during training.")
     tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-    tf.app.flags.DEFINE_integer("state_size", 3, "Size of each model layer.")
+    tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("max_document_size", 120, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("max_question_size", 15, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")

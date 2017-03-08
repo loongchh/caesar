@@ -53,7 +53,9 @@ def load_dataset(type='train', plot=False):
     if plot:
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
-
+    # print "hello", spans[0]
+    spans = sparse_span_matrix(spans)
+    # print "hello", spans[0]
     data = {
         'q': questions,
         'q_m': questions_mask,
@@ -78,6 +80,9 @@ def filter_data(questions, contexts, spans):
         [spans[i] for i in indices]
     )
 
+def sparse_span_matrix(span):
+    return [[int(s[0]), (int(s[1])-int(s[0]))* FLAGS.max_document_size + int(s[1])]for s in span]
+
 
 def padding(data, max_length, zero_vector=0):
     seq = [len(record) for record in data]
@@ -99,7 +104,7 @@ def plot_histogram(data,name ):
     plt.xlabel("Value")
     plt.ylabel("Frequency")
     plt.legend()
-    output_path = pjoin("plots/","{}-histogram.png".format(name))
+    output_path = pjoin("../plots/","{}-histogram.png".format(name))
     plt.savefig(output_path)
 
 
@@ -115,6 +120,16 @@ def initialize_vocab():
     else:
         raise ValueError("Vocabulary file %s not found.", vocab_path)
 
+
+def get_batch(data, i):
+    start = i*FLAGS.batch_size
+    end = (i+1)*FLAGS.batch_size
+
+    batch = {}
+    for k in data:
+        batch[k] = data[k][start:end]
+
+    return batch
 
 if __name__ == '__main__':
     parse_args.parse_args()
