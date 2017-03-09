@@ -5,6 +5,7 @@ import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
+from tensorflow.python import debug as tf_debug
 FLAGS = tf.app.flags.FLAGS
 
 from coattention_model import CoattentionModel
@@ -105,7 +106,11 @@ def train():
         saver = None
 
 
+
         with tf.Session() as session:
+            session = tf_debug.LocalCLIDebugWrapperSession(session)
+            session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
+
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
