@@ -17,6 +17,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def train_epoch(train_data, model, session):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
+    num_train_batches=1
     prog = Progbar(target=1 + num_train_batches)
     for i in range(num_train_batches):
         data_batch = du.get_batch(train_data, i)
@@ -97,7 +98,7 @@ def train():
 
         logger.info("Building model...",)
         start = time.time()
-        model = CoattentionModel(embeddings)
+        model = BaselineModel(embeddings)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
         saver = None
@@ -107,8 +108,8 @@ def train():
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
-            # for epoch in range(1):
-            for epoch in range(FLAGS.epochs):
+            for epoch in range(100):
+            # for epoch in range(FLAGS.epochs):
 
                 run_metadata = tf.RunMetadata()
                 train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
@@ -117,7 +118,7 @@ def train():
                 train_epoch(train_data, model, session)
 
                 ### Evaluation
-                f1, em = evaluate_epoch(val_data, model, session, rev_vocab)
+                # f1, em = evaluate_epoch(val_data, model, session, rev_vocab)
 
                 ### Checkpoint model
             train_writer.close()

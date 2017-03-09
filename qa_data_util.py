@@ -54,7 +54,7 @@ def load_dataset(type='train', plot=False):
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
     # print "hello", spans[0]
-    spans = sparse_span_matrix(spans)
+    # spans = sparse_span_matrix(spans)
     # print "hello", spans[0]
     data = {
         'q': questions,
@@ -86,6 +86,8 @@ def sparse_span_matrix(span):
         return [e, (s-e)*doc_size + s] if s > e else [s, (e-s)*doc_size + e]
 
     return [fun(int(s[0]), int(s[1])) for s in span]
+
+
 
 
 def padding(data, max_length, zero_vector=0):

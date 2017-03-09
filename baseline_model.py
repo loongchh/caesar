@@ -73,6 +73,11 @@ class BaselineModel(QAModel):
         return question_embeddings, document_embeddings
 
     def add_encoder_op(self, debug_shape=False):
+
+        ###################################
+        #####  LSTM preprocessing Layer ###
+        ####################################
+
         q_input,d_input = self.add_embedding()
         dropout_rate = self.dropout_placeholder
 
@@ -190,6 +195,8 @@ class BaselineModel(QAModel):
 
             Hr = tf.pack(Hr,1)
 
+            Hr = tf.concat(1, [tf.zeros(shape=[10,1,FLAGS.state_size]), Hr] )
+
 
         ####################################
         ##### Answer Pointer Layer #########
@@ -232,21 +239,21 @@ class BaselineModel(QAModel):
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
             betas = []
             for k in range(FLAGS.max_document_size):
-                if k>0:
+                if k > 0:
                     tf.get_variable_scope().reuse_variables()
                 V_Hr = tf.einsum('ijk,kl->ijl', Hr, V)
                 Wa_Ha = tf.matmul(ha[1], W_a)
-                Fk = Wa_Ha +  b_p
+                Fk = Wa_Ha + b_p
                 Fk = tf.reshape(
-                    tensor=tf.tile(Fk, [1,FLAGS.max_document_size]),
-                    shape=[FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size]
+                    tensor=tf.tile(Fk, [1,FLAGS.max_document_size+1]),
+                    shape=[FLAGS.batch_size, FLAGS.max_document_size+1, FLAGS.state_size]
                 )
                 Fk = tf.nn.tanh(Fk + V_Hr)
 
-                vt_Fk = tf.reshape(tf.einsum('ijk,kl->ijl', Fk, v),[FLAGS.batch_size, FLAGS.max_document_size])
+                vt_Fk = tf.reshape(tf.einsum('ijk,kl->ijl', Fk, v),[FLAGS.batch_size, FLAGS.max_document_size+1])
 
-                betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size]))
-                betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size])
+                betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size+1]))
+                betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size+1])
             #
                 Hr_betak = tf.einsum('ijk,ikl->ijl', betak_, Hr)
                 Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, FLAGS.state_size])
@@ -255,7 +262,9 @@ class BaselineModel(QAModel):
                 betas.append(betak)
                 _, ha = cell(Hr_betak, ha)
 
-            betas = tf.reshape(tf.pack(betas, 1), [FLAGS.batch_size, FLAGS.max_document_size*FLAGS.max_document_size])
+            betas = tf.pack(betas, 1)
+
+            # betas = tf.reshape(tf.pack(betas, 1), [FLAGS.batch_size, FLAGS.max_document_size*FLAGS.max_document_size])
 
         pred = tf.constant(1,shape=[FLAGS.batch_size, 2], dtype=tf.int32 )
 
@@ -292,9 +301,10 @@ class BaselineModel(QAModel):
         betas = decoded_representation[0]
         pred = decoded_representation[1]
         y = self.span_placeholder
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y[:,0]))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y[:,1]))
-        return (L1+L2, pred)
+        # diff = y[:,1] - y[:,0]
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
+        # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
+        return (L1, pred)
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
