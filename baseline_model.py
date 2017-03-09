@@ -305,16 +305,16 @@ class BaselineModel(QAModel):
         return  (betas, pred)
 
 
-    # def add_loss_op(self, decoded_representation, debug_shape=False):
-    #     betas = decoded_representation[0]
-    #     pred = decoded_representation[1]
-    #     y = self.span_placeholder
-    #     # diff = y[:,1] - y[:,0]
-    #     L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
-    #     # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
-    #     return (L1, pred)
-    #
-    # def add_training_op(self, loss, debug_shape=False):
-    #     train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
-    #
-    #     return (train_op,) + loss
+    def add_loss_op(self, decoded_representation, debug_shape=False):
+        betas = decoded_representation[0]
+        pred = decoded_representation[1]
+        y = self.exploded_span_placeholder
+        # diff = y[:,1] - y[:,0]
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
+        # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
+        return (L1, pred)
+
+    def add_training_op(self, loss, debug_shape=False):
+        train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
+
+        return (train_op,) + loss
