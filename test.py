@@ -1,3 +1,9 @@
+a=1
+b=2
+print a,b
+a,b= (b,a)
+print a,b
+
 for j in range(2,5):
     print j
 def test(a,b,c,d):

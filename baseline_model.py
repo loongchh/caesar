@@ -41,8 +41,13 @@ class BaselineModel(QAModel):
                                                 name="document_seq_placeholder")
 
         self.span_placeholder = tf.placeholder(tf.int32,
-                                                 shape=(FLAGS.batch_size, 2),
-                                                 name="span_placeholder")
+                                               shape=(FLAGS.batch_size, 120),
+                                               name="span_placeholder")
+
+        self.exploded_span_placeholder = tf.placeholder(tf.int32,
+                                                        shape=(FLAGS.batch_size, 2),
+                                                        name="exploded_span_placeholder")
+
         self.dropout_placeholder = tf.placeholder(tf.float32,
                                                   name="dropout_placeholder")
 
@@ -60,6 +65,9 @@ class BaselineModel(QAModel):
             feed_dict[self.dropout_placeholder] = dropout
         if data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
+
+        if data_batch['s_e'] is not None:
+            feed_dict[self.exploded_span_placeholder] = data_batch['s_e']
 
         return feed_dict
 
@@ -302,7 +310,7 @@ class BaselineModel(QAModel):
         pred = decoded_representation[1]
         y = self.span_placeholder
         # diff = y[:,1] - y[:,0]
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
         # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
         return (L1, pred)
 

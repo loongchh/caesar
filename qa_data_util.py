@@ -53,9 +53,9 @@ def load_dataset(type='train', plot=False):
     if plot:
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
-    # print "hello", spans[0]
-    # spans = sparse_span_matrix(spans)
-    # print "hello", spans[0]
+    print "hello", spans[0]
+    exploded_spans = explode_span(spans)
+    print "hello", exploded_spans[0]
     data = {
         'q': questions,
         'q_m': questions_mask,
@@ -63,7 +63,8 @@ def load_dataset(type='train', plot=False):
         'c': contexts,
         'c_m': contexts_mask,
         'c_s': contexts_seq,
-        's': spans}
+        's': spans,
+        's_e': exploded_spans}
     return data
 
 
@@ -88,6 +89,17 @@ def sparse_span_matrix(span):
     return [fun(int(s[0]), int(s[1])) for s in span]
 
 
+def explode_span(span):
+    doc_size = FLAGS.max_document_size
+
+    def fun(s, e):
+        s,e = (s, e) if s <= e else (e, s)
+        padding = [doc_size] * (doc_size - e + s - 1)
+        return range(s,e+1) + padding
+
+    return [fun(int(s[0]), int(s[1])) for s in span]
+
+# def
 
 
 def padding(data, max_length, zero_vector=0):
