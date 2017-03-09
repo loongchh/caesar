@@ -152,5 +152,5 @@ def debug_shape():
 
 if __name__ == "__main__":
     parse_args.parse_args()
-    debug_shape()
-    # train()
+    # debug_shape()
+    train()
