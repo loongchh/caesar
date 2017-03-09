@@ -108,8 +108,8 @@ def train():
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
-            for epoch in range(100):
-            # for epoch in range(FLAGS.epochs):
+            # for epoch in range(100):
+            for epoch in range(FLAGS.epochs):
 
                 run_metadata = tf.RunMetadata()
                 train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)

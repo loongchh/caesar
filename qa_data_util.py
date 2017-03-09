@@ -53,9 +53,9 @@ def load_dataset(type='train', plot=False):
     if plot:
         plot_histogram(contexts, "{}-contexts-truncated".format(type))
         plot_histogram(questions, "{}-questions-truncated".format(type))
-    print "hello", spans[0]
+    logger.debug("Sample Span {}".format(spans[0]))
     exploded_spans = explode_span(spans)
-    print "hello", exploded_spans[0]
+    logger.debug("Exploded Sample span {}".format(exploded_spans[0]))
     data = {
         'q': questions,
         'q_m': questions_mask,

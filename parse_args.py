@@ -21,6 +21,7 @@ def parse_args():
     tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
     tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{vocab_dim}.npz)")
 
-
     tf.app.flags.DEFINE_integer("coattention_pooling_size",11, "")
+
+    tf.app.flags.DEFINE_string("baseline_loss_type","sequence", "")
 

@@ -308,11 +308,16 @@ class BaselineModel(QAModel):
     def add_loss_op(self, decoded_representation, debug_shape=False):
         betas = decoded_representation[0]
         pred = decoded_representation[1]
-        y = self.exploded_span_placeholder
-        # diff = y[:,1] - y[:,0]
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
-        # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
-        return (L1, pred)
+
+
+        if FLAGS.baseline_loss_type == "sequence":
+            y = self.exploded_span_placeholder
+            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
+        else:
+            y = self.span_placeholder
+            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
+            # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
+        return (L, pred)
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
