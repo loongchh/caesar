@@ -41,11 +41,11 @@ class BaselineModel(QAModel):
                                                 name="document_seq_placeholder")
 
         self.span_placeholder = tf.placeholder(tf.int32,
-                                               shape=(FLAGS.batch_size, 120),
+                                               shape=(FLAGS.batch_size, 2),
                                                name="span_placeholder")
 
         self.exploded_span_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, 2),
+                                                        shape=(FLAGS.batch_size, FLAGS.max_document_size),
                                                         name="exploded_span_placeholder")
 
         self.dropout_placeholder = tf.placeholder(tf.float32,
