@@ -18,13 +18,14 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def train_epoch(train_data, model, session):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
-    prog = Progbar(target=num_train_batches-1)
+    prog = Progbar(target=num_train_batches)
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i)
         loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         prog.update(i+1, [("train loss", loss)])
+    print ""
 
 
 # def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
@@ -100,7 +101,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
     data_size = len(val_data['q'])
     num_val_batches = int(data_size/batch_size)
 
-    prog = Progbar(target= num_val_batches-1)
+    prog = Progbar(target= num_val_batches)
     for i in range(num_val_batches):
         if i >= FLAGS.val_batch >= 0:
             break
@@ -114,6 +115,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
         f1_sum += f1
         em_sum += em
         prog.update(i+1, [("F1", f1), ("em", em)])
+    print ""
     logger.info("Evaluation: F1 Score: {}. EM Score: {}".format(f1_sum/batch_size, em_sum/batch_size))
     return f1_sum/batch_size, em_sum/batch_size
 

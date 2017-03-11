@@ -51,7 +51,7 @@ class MatchLstmModel():
                                                         shape=(FLAGS.batch_size, FLAGS.max_answer_size),
                                                         name="answer_placeholder")
 
-        self.answer_mask_placeholder = tf.placeholder(tf.int32,
+        self.answer_mask_placeholder = tf.placeholder(tf.bool,
                                                         shape=(FLAGS.batch_size, FLAGS.max_answer_size),
                                                         name="answer_mask_placeholder")
         self.answer_seq_placeholder = tf.placeholder(tf.int32,

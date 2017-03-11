@@ -23,7 +23,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("debug_shape", 0, "Debug shapes of Tensor")
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
-    tf.app.flags.DEFINE_integer("print_text", 99, "No of batches used in validaton. Set -1 to validate on all.")
+    tf.app.flags.DEFINE_integer("print_text", 99, "Print predicted text after every n epochs")
 
     tf.app.flags.DEFINE_integer("coattention_pooling_size",11, "")
 
