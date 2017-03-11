@@ -365,7 +365,7 @@ class MatchLstmBoundryModel():
             fetches = util.tuple_to_list(*self.answer_pointer_rep),
             feed_dict=feed
         )
-        pred = du.get_answer_from_span(answer_pointer_rep[2])
+        pred = du.get_answer_from_span(answer_pointer_rep[1])
         return pred
 
     def train_on_batch(self, sess, data_batch):
