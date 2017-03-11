@@ -11,10 +11,13 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
-class BaselineModel(QAModel):
+class MatchLstmModel():
 
     def __init__(self, embeddings, debug_shape=False):
-        super(BaselineModel, self).__init__(embeddings, debug_shape)
+        self.pretrained_embeddings = embeddings
+        self.build(debug_shape)
+
+
 
     def add_placeholders(self):
         self.question_placeholder = tf.placeholder(tf.int32,
@@ -44,9 +47,16 @@ class BaselineModel(QAModel):
                                                shape=(FLAGS.batch_size, 2),
                                                name="span_placeholder")
 
-        self.exploded_span_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, FLAGS.max_document_size),
-                                                        name="exploded_span_placeholder")
+        self.answer_placeholder = tf.placeholder(tf.int32,
+                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+                                                        name="answer_placeholder")
+
+        self.answer_mask_placeholder = tf.placeholder(tf.int32,
+                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+                                                        name="answer_mask_placeholder")
+        self.answer_seq_placeholder = tf.placeholder(tf.int32,
+                                                        shape=(FLAGS.batch_size, ),
+                                                        name="answer_seq_placeholder")
 
         self.dropout_placeholder = tf.placeholder(tf.float32,
                                                   name="dropout_placeholder")
@@ -66,8 +76,15 @@ class BaselineModel(QAModel):
         if data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
 
-        if data_batch['s_e'] is not None:
-            feed_dict[self.exploded_span_placeholder] = data_batch['s_e']
+        if data_batch['a'] is not None:
+            feed_dict[self.answer_placeholder] = data_batch['a']
+
+        if data_batch['a_m'] is not None:
+            feed_dict[self.answer_mask_placeholder] = data_batch['a_m']
+
+        if data_batch['a_s'] is not None:
+            feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
+
 
         return feed_dict
 
@@ -80,11 +97,12 @@ class BaselineModel(QAModel):
 
         return question_embeddings, document_embeddings
 
-    def add_encoder_op(self, debug_shape=False):
 
-        ###################################
-        #####  LSTM preprocessing Layer ###
-        ####################################
+
+    ###################################
+    #####  LSTM preprocessing Layer ###
+    ####################################
+    def add_preprocessing_op(self, debug_shape=False):
 
         q_input,d_input = self.add_embedding()
         dropout_rate = self.dropout_placeholder
@@ -116,24 +134,23 @@ class BaselineModel(QAModel):
                                             )
             H_P = output
 
-        representations = (H_Q,H_P)
+        preprocessing_rep = (H_Q,H_P)
 
         if debug_shape:
-            return representations + (
-                tf.shape(d_input,name="debug_d_input"),
-                tf.shape(q_input,name="debug_q_input"),
-                tf.shape(H_Q,name="debug_H_Q"),
-                tf.shape(H_P,name="debug_H_p")
+            return preprocessing_rep + (
+                tf.shape(d_input,name="debug_PLL_d_input"),
+                tf.shape(q_input,name="debug_PLL_q_input"),
+                tf.shape(H_Q,name="debug_PLL_H_Q"),
+                tf.shape(H_P,name="debug_PLL_H_p")
             )
-        return representations
+        return preprocessing_rep
 
-    def add_decoder_op(self, encoded_representation, debug_shape=False):
-        H_Q = encoded_representation[0]
-        H_P = tf.unpack(encoded_representation[1])
-
-        ####################################
-        #####  Match LSTM Layer #########
-        ####################################
+    ####################################
+    #####  Match LSTM Layer #########
+    ####################################
+    def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
+        H_Q = preprocessing_rep[0]
+        H_P = tf.unpack(preprocessing_rep[1])
 
         with tf.variable_scope("Match_LSTM"):
             W_q =tf.get_variable(name='W_q',
@@ -203,12 +220,31 @@ class BaselineModel(QAModel):
 
             Hr = tf.pack(Hr,1)
 
-            Hr = tf.concat(1, [tf.zeros(shape=[10,1,FLAGS.state_size]), Hr] )
+        match_lstm_rep = (Hr,)
+        if debug_shape:
+            return match_lstm_rep + (
+                tf.shape(H_P,name="debug_MLL_HP"),
+                tf.shape(H_Q,name="debug_MLL_HQ"),
+                tf.shape(H_P[0],name="debug_MLL_HP0"),
+                tf.shape(Wq_HQ,name="debug_MLL_Wq_HQ"),
+                tf.shape(Wp_HPi,name="debug_MLL_Wp_HPi"),
+                tf.shape(Wr_Hr,name="debug_MLL_Wr_Hr"),
+                tf.shape(Gi,name="debug_MLL_Gi"),
+                tf.shape(wt_Gi,name="debug_MLL_wt_Gi"),
+                tf.shape(alphai,name="debug_MLL_alphai"),
+                tf.shape(HQ_alphai,name="debug_MLL_HQ_alphai"),
+                tf.shape(zi,name="debug_MLL_zi"),
+                tf.shape(Hr,name="debug_MLL_Hr"),
+            ) + preprocessing_rep
 
+        return match_lstm_rep + preprocessing_rep
 
-        ####################################
-        ##### Answer Pointer Layer #########
-        ####################################
+    ####################################
+    ##### Answer Pointer Layer #########
+    ####################################
+    def add_answer_pointer_op(self, match_lstm_rep, debug_shape=False):
+        Hr = match_lstm_rep[0]
+        Hr = tf.concat(1, [tf.zeros(shape=[10,1,FLAGS.state_size]), Hr] )
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
@@ -246,12 +282,12 @@ class BaselineModel(QAModel):
 
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
             betas = []
-            for k in range(FLAGS.max_document_size):
+            for k in range(FLAGS.max_answer_size):
                 if k > 0:
                     tf.get_variable_scope().reuse_variables()
                 V_Hr = tf.einsum('ijk,kl->ijl', Hr, V)
                 Wa_Ha = tf.matmul(ha[1], W_a)
-                Fk = Wa_Ha + b_p
+                Fk = Wa_Ha + b_a
                 Fk = tf.reshape(
                     tensor=tf.tile(Fk, [1,FLAGS.max_document_size+1]),
                     shape=[FLAGS.batch_size, FLAGS.max_document_size+1, FLAGS.state_size]
@@ -272,54 +308,77 @@ class BaselineModel(QAModel):
 
             betas = tf.pack(betas, 1)
 
-            # betas = tf.reshape(tf.pack(betas, 1), [FLAGS.batch_size, FLAGS.max_document_size*FLAGS.max_document_size])
+        pred = tf.argmax(betas,2)
 
-        pred = tf.constant(1,shape=[FLAGS.batch_size, 2], dtype=tf.int32 )
-
-        debug_info = (
-            tf.shape(H_P,name="debug_HP"),
-            tf.shape(H_Q,name="debug_HQ"),
-            tf.shape(H_P[0],name="debug_HP0"),
-            tf.shape(Wq_HQ,name="debug_Wq_HQ"),
-            tf.shape(Wp_HPi,name="debug_Wp_HPi"),
-            tf.shape(Wr_Hr,name="debug_Wr_Hr"),
-            tf.shape(Gi,name="debug_Gi"),
-            tf.shape(wt_Gi,name="debug_wt_Gi"),
-            tf.shape(alphai,name="debug_alphai"),
-            tf.shape(HQ_alphai,name="debug_HQ_alphai"),
-            tf.shape(zi,name="debug_zi"),
-            tf.shape(Hr,name="debug_Hr"),
-            tf.shape(V_Hr,name="debug_V_Hr"),
-            tf.shape(Fk,name="debug_Fk"),
-            tf.shape(vt_Fk,name="debug_vt_fk"),
-            tf.shape(betak,name="debug_betak"),
-            tf.shape(Hr_betak,name="debug_Hr_betak"),
-            tf.shape(betas,name="debug_betas"),
-        )
-
-
-
-
+        answer_pointer_rep = (betas, pred)
         if debug_shape:
-            return (betas, pred) + debug_info #+encoded_representation
-        return  (betas, pred)
+            return answer_pointer_rep + (
+                tf.shape(V_Hr,name="debug_APL_V_Hr"),
+                tf.shape(Fk,name="debug_APL_Fk"),
+                tf.shape(vt_Fk,name="debug_APL_vt_fk"),
+                tf.shape(betak,name="debug_APL_betak"),
+                tf.shape(Hr_betak,name="debug_APL_Hr_betak"),
+                tf.shape(betas,name="debug_APL_betas"),
+                tf.shape(pred,name="debug_APL_pred"),
+            ) + match_lstm_rep
+
+        return answer_pointer_rep + match_lstm_rep
 
 
-    def add_loss_op(self, decoded_representation, debug_shape=False):
-        betas = decoded_representation[0]
-        pred = decoded_representation[1]
+    def add_loss_op(self, answer_pointer_rep, debug_shape=False):
+        betas = answer_pointer_rep[0]
 
-
-        if FLAGS.baseline_loss_type == "sequence":
-            y = self.exploded_span_placeholder
+        if FLAGS.match_lstm_loss_type == "sequence":
+            y = self.answer_placeholder
             L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
         else:
             y = self.span_placeholder
             L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
             # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
-        return (L, pred)
+        return (L,) + answer_pointer_rep
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
 
         return (train_op,) + loss
+
+    def build(self, debug_shape):
+        self.add_placeholders()
+        self.preprocessing_rep = self.add_preprocessing_op(debug_shape)
+        self.match_lstm_rep = self.add_match_lstm_op(self.preprocessing_rep, debug_shape)
+        self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
+        self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
+        self.train_op = self.add_training_op(self.loss, debug_shape)
+
+    def debug_shape(self, sess, data_batch):
+        feed = self.create_feed_dict(data_batch)
+
+        train_op_output = sess.run(
+            fetches = util.tuple_to_list(*self.train_op),
+            feed_dict=feed
+        )
+        for i, tensor in enumerate(self.train_op):
+            if tensor.name.startswith("debug_"):
+                logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
+
+    def predict_on_batch(self, sess, data_batch):
+        feed = self.create_feed_dict(data_batch)
+        answer_pointer_rep = sess.run(
+            fetches = util.tuple_to_list(*self.answer_pointer_rep),
+            feed_dict=feed
+        )
+        pred = answer_pointer_rep[1]
+        return pred
+
+    def train_on_batch(self, sess, data_batch):
+        feed = self.create_feed_dict(data_batch)
+
+        train_op = sess.run(
+            fetches = util.tuple_to_list(*self.train_op),
+            feed_dict=feed
+        )
+
+        loss = train_op[1]
+        pred = train_op[2]
+
+        return loss, pred

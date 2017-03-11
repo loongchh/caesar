@@ -32,30 +32,37 @@ def load_dataset(type='train', plot=False):
     questions = read_dataset(train_path_q)
     contexts = read_dataset(train_path_c)
     spans = read_dataset(train_path_a)
+    spans = cast_to_int(spans)
+    logger.debug("Sample Span {}".format(spans[0]))
+    ground_truth = get_answer_from_span(spans)
+    logger.debug("Answer from span {}".format(ground_truth[0]))
+
     assert len(questions) == len(contexts) and  len(contexts) == len(spans)
     logger.debug("loaded {} data of size {}".format(type, len(questions)))
 
     if plot:
         plot_histogram(questions, "{}-questions".format(type))
         plot_histogram(contexts, "{}-contexts".format(type))
+        plot_histogram(ground_truth, "{}-answers".format(type))
 
-    questions, contexts,spans = filter_data(questions, contexts, spans)
+    questions, contexts,spans, ground_truth = filter_data(questions, contexts, spans, ground_truth)
 
     logger.debug("filtered {} data, new size {}".format(type, len(questions)))
     if plot:
         plot_histogram(contexts, "{}-contexts-filtered".format(type))
         plot_histogram(questions, "{}-questions-filtered".format(type))
+        plot_histogram(ground_truth, "{}-answers-filtered".format(type))
 
 
     questions, questions_mask, questions_seq = padding(questions, 15)
     contexts, contexts_mask, contexts_seq = padding(contexts, 120)
+    answers, answers_mask, answers_seq = padding(ground_truth, 6, zero_vector=120)
 
     if plot:
-        plot_histogram(contexts, "{}-contexts-truncated".format(type))
-        plot_histogram(questions, "{}-questions-truncated".format(type))
-    logger.debug("Sample Span {}".format(spans[0]))
-    exploded_spans = explode_span(spans)
-    logger.debug("Exploded Sample span {}".format(exploded_spans[0]))
+        plot_histogram(contexts, "{}-contexts-padded".format(type))
+        plot_histogram(questions, "{}-questions-padded".format(type))
+        plot_histogram(answers, "{}-answers-padded".format(type))
+
     data = {
         'q': questions,
         'q_m': questions_mask,
@@ -64,42 +71,41 @@ def load_dataset(type='train', plot=False):
         'c_m': contexts_mask,
         'c_s': contexts_seq,
         's': spans,
-        's_e': exploded_spans}
+        'gt': ground_truth,
+        's_e': answers,
+        'a': answers,
+        'a_m': answers_mask,
+        'a_s': answers_seq,
+    }
     return data
 
 
-def filter_data(questions, contexts, spans):
+def cast_to_int(data):
+    return [[int(field) for field in record] for record in data]
 
-    def filter(q_len, c_len):
-        return 5 < q_len <= 15 and 80 < c_len <= 120
 
-    indices = [i for i, q in enumerate(questions) if filter(len(q), len(contexts[i])) ]
+def filter_data(questions, contexts, spans, exploded_spans):
+
+    def filter(q_len, c_len, a_len=1):
+        return 5 < q_len <= 15 and 80 < c_len <= 120 and a_len <= 5
+
+    indices = [i for i, q in enumerate(questions) if filter(len(q), len(contexts[i]), len(exploded_spans[i])) ]
 
     return (
         [questions[i] for i in indices],
         [contexts[i] for i in indices],
-        [spans[i] for i in indices]
+        [spans[i] for i in indices],
+        [exploded_spans[i] for i in indices]
     )
 
-def sparse_span_matrix(span):
-    def fun(s,e):
-        doc_size = FLAGS.max_document_size
-        return [e, (s-e)*doc_size + s] if s > e else [s, (e-s)*doc_size + e]
 
-    return [fun(int(s[0]), int(s[1])) for s in span]
-
-
-def explode_span(span):
+def get_answer_from_span(span, add_end_index=False):
     doc_size = FLAGS.max_document_size
 
     def fun(s, e):
         s,e = (s, e) if s <= e else (e, s)
-        padding = [doc_size] * (doc_size - e + s - 1)
-        return range(s,e+1) + padding
-
-    return [fun(int(s[0]), int(s[1])) for s in span]
-
-# def
+        return range(s,e+1)
+    return [fun(s[0], s[1]) for s in span]
 
 
 def padding(data, max_length, zero_vector=0):
@@ -124,7 +130,6 @@ def plot_histogram(data,name ):
     plt.legend()
     output_path = pjoin("../plots/","{}-histogram.png".format(name))
     plt.savefig(output_path)
-
 
 def initialize_vocab():
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")

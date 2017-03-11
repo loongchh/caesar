@@ -9,7 +9,7 @@ from tensorflow.python import debug as tf_debug
 FLAGS = tf.app.flags.FLAGS
 
 from coattention_model import CoattentionModel
-from baseline_model import BaselineModel
+from match_lstm import MatchLstmModel
 
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
@@ -27,42 +27,58 @@ def train_epoch(train_data, model, session):
             break
 
 
-def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
+# def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
+#         f1 = 0
+#         em = False
+#
+#         ## Reverse the indices if start is greater than end, SHOULDN'T Happen
+#         if predicted_span[0] > predicted_span[1]:
+#             a = predicted_span[0]
+#             predicted_span[0]=predicted_span[1]
+#             predicted_span[1] = a
+#
+#         ground_truth_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
+#                                 if int(ground_truth_span[0]) <= int(index) <= int(ground_truth_span[1])]
+#
+#         predicted_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
+#                                 if int(predicted_span[0]) <= int(index) <= int(predicted_span[1])]
+#
+#         predicted = " ".join(predicted_tokens)
+#         ground_truth = " ".join(ground_truth_tokens)
+#         if em:
+#             print predicted, document, question
+#         f1 = evaluate.f1_score(predicted, ground_truth)
+#         em = evaluate.exact_match_score(predicted, ground_truth)
+#         return f1, em
+
+def evaluate_single(document, ground_truth, predicted, rev_vocab):
         f1 = 0
         em = False
 
-        ## Reverse the indices if start is greater than end, SHOULDN'T Happen
-        if predicted_span[0] > predicted_span[1]:
-            a = predicted_span[0]
-            predicted_span[0]=predicted_span[1]
-            predicted_span[1] = a
-
-        ground_truth_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-                                if int(ground_truth_span[0]) <= int(index) <= int(ground_truth_span[1])]
-
-        predicted_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-                                if int(predicted_span[0]) <= int(index) <= int(predicted_span[1])]
+        ground_truth_tokens = [rev_vocab[document[index]] for index in ground_truth]
+        predicted_tokens = [rev_vocab[[document[index]]] for index in predicted if index < FLAGS.max_document_size]
 
         predicted = " ".join(predicted_tokens)
         ground_truth = " ".join(ground_truth_tokens)
-        if em:
-            print predicted, document, question
+
         f1 = evaluate.f1_score(predicted, ground_truth)
         em = evaluate.exact_match_score(predicted, ground_truth)
         return f1, em
 
 
-def evaluate_batch(data_batch, predicted_span_batch, rev_vocab):
+def evaluate_batch(data_batch, predicted_batch, rev_vocab):
     f1_sum = 0.
     em_sum = 0.
-    for i, d in enumerate(data_batch['d']):
-        q = data_batch['q'][i]
-        s = data_batch['s'][i]
-        ps = predicted_span_batch[i]
-        f1, em = evaluate_single(d,q,s,ps,rev_vocab)
+    for i in range(len(data_batch['d'])):
+        f1, em = evaluate_single(
+            document=data_batch['d'][i],
+            ground_truth=data_batch['gt'][i],
+            predicted=predicted_batch[i],
+            rev_vocab=rev_vocab
+        )
         f1_sum += f1
         em_sum += 1. if em else 0.
-    return f1_sum/len(predicted_span_batch), em_sum/len(predicted_span_batch)
+    return f1_sum/len(predicted_batch), em_sum/len(predicted_batch)
 
 
 def evaluate_epoch(val_data, model, session, rev_vocab):
@@ -74,11 +90,11 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
     data_size = len(val_data['q'])
     num_val_batches = int(data_size/batch_size)
 
-    prog = Progbar(target=1 + num_val_batches)
+    prog = Progbar(target= num_val_batches)
     for i in range(num_val_batches):
         data_batch = du.get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
-        f1, em = evaluate_batch(data_batch=data_batch, predicted_span_batch=pred,rev_vocab=rev_vocab)
+        f1, em = evaluate_batch(data_batch=data_batch, predicted_batch=pred,rev_vocab=rev_vocab)
         f1_sum += f1
         em_sum += em
         prog.update(i+1, [("F1", f1), ("em", em)])
@@ -94,13 +110,11 @@ def train():
     train_data = du.load_dataset(type = "train")
     val_data = du.load_dataset(type = "val")
 
-
-
     with tf.Graph().as_default():
 
         logger.info("Building model...",)
         start = time.time()
-        model = BaselineModel(embeddings)
+        model = MatchLstmModel(embeddings)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
         saver = None
@@ -108,8 +122,8 @@ def train():
 
 
         with tf.Session() as session:
-            session = tf_debug.LocalCLIDebugWrapperSession(session)
-            session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
+            # session = tf_debug.LocalCLIDebugWrapperSession(session)
+            # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
             train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
@@ -124,7 +138,7 @@ def train():
                 train_epoch(train_data, model, session)
 
                 ### Evaluation
-                # f1, em = evaluate_epoch(val_data, model, session, rev_vocab)
+                f1, em = evaluate_epoch(val_data, model, session, rev_vocab)
 
                 ### Checkpoint model
             train_writer.close()
@@ -143,7 +157,7 @@ def debug_shape():
         logger.info("Building model for Debugging Shape...")
         start = time.time()
         # model = CoattentionModel(embeddings, debug_shape=True)
-        model = BaselineModel(embeddings, debug_shape=True)
+        model = MatchLstmModel(embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
 
@@ -158,5 +172,5 @@ def debug_shape():
 
 if __name__ == "__main__":
     parse_args.parse_args()
-    # debug_shape()
+    debug_shape()
     train()
