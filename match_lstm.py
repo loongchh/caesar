@@ -98,7 +98,69 @@ class MatchLstmModel():
 
         return question_embeddings, document_embeddings
 
+    def add_char_embedding(self):
+        char_emb_mat = tf.get_variable("char_emb_mat", shape=[FLAGS.char_vocab_size, FLAGS.char_emb_size], dtype='float')
 
+        question_embeddings = tf.nn.embedding_lookup(params=char_emb_mat, ids=self.question_placeholder)
+        document_embeddings = tf.nn.embedding_lookup(params=char_emb_mat, ids=self.document_placeholder)
+
+        filter_sizes = list(map(int, FLAGS.out_channel_dims.split(',')))
+        heights = list(map(int, FLAGS.filter_heights.split(',')))
+        assert sum(filter_sizes) == dco, (filter_sizes, FLAGS.char_out_size)
+
+        with tf.variable_scope("conv"):
+            X_d = multi_conv1d(document_embeddings, filter_sizes, heights, "VALID", self.is_train, FLAGS.cnn_keep_prob, scope="X_d")
+            tf.get_variable_scope().reuse_variables()
+            X_q = multi_conv1d(question_embeddings, filter_sizes, heights, "VALID", self.is_train, FLAGS.cnn_keep_prob, scope="X_q")
+
+            X_d = tf.reshape(X_d, [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.char_out_size])
+            X_q = tf.reshape(X_q, [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.char_out_size])
+
+        return (X_q, X_d)
+
+    def highway_layer(arg, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+        with tf.variable_scope(scope or "highway_layer"):
+        d = arg.get_shape()[-1]
+        trans = linear([arg], d, bias, bias_start=bias_start, scope='trans', wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        trans = tf.nn.relu(trans)
+        gate = linear([arg], d, bias, bias_start=bias_start, scope='gate', wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
+        gate = tf.nn.sigmoid(gate)
+        out = gate * trans + (1 - gate) * arg
+        return out
+
+    def highway_network(arg, num_layers, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+        with tf.variable_scope(scope or "highway_network"):
+            prev = arg
+            cur = None
+            for layer_idx in range(num_layers):
+                cur = highway_layer(prev, bias, bias_start=bias_start, scope="layer_{}".format(layer_idx), wd=wd,
+                                    input_keep_prob=input_keep_prob, is_train=is_train)
+                prev = cur
+            return cur
+
+    def conv1d(in_, filter_size, height, padding, is_train=None, keep_prob=1.0, scope=None):
+        with tf.variable_scope(scope or "conv1d"):
+        num_channels = in_.get_shape()[-1]
+        filter_ = tf.get_variable("filter", shape=[1, height, num_channels, filter_size], dtype='float')
+        bias = tf.get_variable("bias", shape=[filter_size], dtype='float')
+        strides = [1, 1, 1, 1]
+        if is_train is not None and keep_prob < 1.0:
+            in_ = dropout(in_, keep_prob, is_train)
+        xxc = tf.nn.conv2d(in_, filter_, strides, padding) + bias  # [N*M, JX, W/filter_stride, d]
+        out = tf.reduce_max(tf.nn.relu(xxc), 2)  # [-1, JX, d]
+        return out
+
+    def multi_conv1d(in_, filter_sizes, heights, padding, is_train=None, keep_prob=1.0, scope=None):
+        with tf.variable_scope(scope or "multi_conv1d"):
+            assert len(filter_sizes) == len(heights)
+            outs = []
+            for filter_size, height in zip(filter_sizes, heights):
+                if filter_size == 0:
+                    continue
+                out = conv1d(in_, filter_size, height, padding, is_train=is_train, keep_prob=keep_prob, scope="conv1d_{}".format(height))
+                outs.append(out)
+            concat_out = tf.concat(2, outs)
+            return concat_out
 
     ###################################
     #####  LSTM preprocessing Layer ###
@@ -134,6 +196,34 @@ class MatchLstmModel():
                                             time_major=True
                                             )
             H_P = output
+
+        if FLAGS.use_char_emb:
+            char_q_input, char_d_input = self.add_char_embedding()
+            dropout_rate = self.dropout_placeholder
+
+            with tf.variable_scope("C_Q_LSTM"):
+                cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+                initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
+                (output, _) = tf.nn.dynamic_rnn(cell=cell,
+                                                inputs=char_q_input,
+                                                initial_state=initial_state,
+                                                sequence_length=self.question_seq_placeholder
+                                                )
+                C_H_Q = output
+
+            with tf.variable_scope("C_P_LSTM"):
+                cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+                initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
+                (output, _) = tf.nn.dynamic_rnn(cell=cell,
+                                                inputs=tf.transpose(char_d_input,perm=[1,0,2]),
+                                                initial_state=initial_state,
+                                                sequence_length=self.question_seq_placeholder,
+                                                time_major=True
+                                                )
+                C_H_P = output
+                
+            H_Q = tf.concat(2, [H_Q, C_H_Q])
+            H_P = tf.concat(2, [H_P, C_H_P])
 
         preprocessing_rep = (H_Q,H_P)
 
