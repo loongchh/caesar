@@ -62,6 +62,8 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_t
         predicted_text = " ".join(predicted_tokens)
         ground_truth_text = " ".join(ground_truth_tokens)
 
+        f1 = evaluate.f1_score(predicted_text, ground_truth_text)
+        em = evaluate.exact_match_score(predicted_text, ground_truth_text)
         if em:
             logger.info("--------Match!!--------------")
             logger.info("Ground truth: {}".format(ground_truth_text))
@@ -70,9 +72,6 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_t
         elif print_answer_text:
             logger.info("Ground truth: {}".format(ground_truth_text))
             logger.info("Predicted Answer: {}".format(predicted_text))
-
-        f1 = evaluate.f1_score(predicted_text, ground_truth_text)
-        em = evaluate.exact_match_score(predicted_text, ground_truth_text)
         return f1, em
 
 
