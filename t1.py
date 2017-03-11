@@ -25,7 +25,6 @@ def train_epoch(train_data, model, session):
         data_batch = du.get_batch(train_data, i)
         loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         prog.update(i+1, [("train loss", loss)])
-    prog.
 
 
 # def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
