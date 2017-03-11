@@ -32,7 +32,12 @@ def load_dataset(type='train', plot=False):
     questions = read_dataset(train_path_q)
     contexts = read_dataset(train_path_c)
     spans = read_dataset(train_path_a)
+    ## cast the data from string to int
+    questions = cast_to_int(questions)
+    contexts = cast_to_int(contexts)
     spans = cast_to_int(spans)
+
+    ## Flatten Answer span to obtain Ground Truth
     logger.debug("Sample Span {}".format(spans[0]))
     ground_truth = get_answer_from_span(spans)
     logger.debug("Answer from span {}".format(ground_truth[0]))
