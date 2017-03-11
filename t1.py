@@ -85,8 +85,6 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
             rev_vocab=rev_vocab,
             print_answer_text=print_answer_text
         )
-        if em:
-            print "!!!Correct Prediction for Passage:\n{} and Question:\n{}".format(c,q),
         f1_sum += f1
         em_sum += 1. if em else 0.
     return f1_sum/len(predicted_batch), em_sum/len(predicted_batch)
@@ -111,7 +109,8 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
             data_batch=data_batch,
             predicted_batch=pred,
             rev_vocab=rev_vocab,
-            print_answer_text=print_answer_text)
+            print_answer_text=(print_answer_text and i%17==1)
+        )
         f1_sum += f1
         em_sum += em
         prog.update(i+1, [("F1", f1), ("em", em)])
