@@ -18,13 +18,14 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def train_epoch(train_data, model, session):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
-    prog = Progbar(target=num_train_batches)
+    prog = Progbar(target=num_train_batches-1)
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i)
         loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         prog.update(i+1, [("train loss", loss)])
+    prog.
 
 
 # def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
@@ -64,7 +65,7 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_t
             logger.info("Ground truth: {}".format(ground_truth_text))
             logger.info("Predicted Answer: {}".format(predicted_text))
         f1 = evaluate.f1_score(predicted_text, ground_truth_text)
-        em = evaluate.exact_match_score(predicted, ground_truth)
+        em = evaluate.exact_match_score(predicted_text, ground_truth_text)
         return f1, em
 
 
@@ -100,7 +101,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
     data_size = len(val_data['q'])
     num_val_batches = int(data_size/batch_size)
 
-    prog = Progbar(target= num_val_batches)
+    prog = Progbar(target= num_val_batches-1)
     for i in range(num_val_batches):
         if i >= FLAGS.val_batch >= 0:
             break
@@ -119,6 +120,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
 
 
 def train():
+    logger.info("----------------Training model-----------------------------")
     vocab,rev_vocab = du.initialize_vocab()
 
     embeddings = du.load_embeddings()
@@ -133,8 +135,6 @@ def train():
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
         saver = None
-
-
 
         with tf.Session() as session:
             # session = tf_debug.LocalCLIDebugWrapperSession(session)
@@ -166,7 +166,7 @@ def debug_shape():
     embeddings = du.load_embeddings()
     val_data = du.load_dataset(type = "val")
     vocab,rev_vocab = du.initialize_vocab()
-    logger.info("----------------------------------------------------------")
+    logger.info("----------------Debugging Tensor Shapes-----------------------------")
     with tf.Graph().as_default():
 
         logger.info("Building model for Debugging Shape...")
@@ -182,7 +182,7 @@ def debug_shape():
                 session,
                 data_batch=du.get_batch(val_data,0)
             )
-    logger.info("----------------------------------------------------------")
+    logger.info("")
 
 
 if __name__ == "__main__":
