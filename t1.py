@@ -87,7 +87,7 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
         )
         f1_sum += f1
         em_sum += 1. if em else 0.
-    return f1_sum/len(predicted_batch), em_sum/len(predicted_batch)
+    return f1_sum/len(predicted_batch), em_sum
 
 
 def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
@@ -98,7 +98,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
 
     data_size = len(val_data['q'])
     num_val_batches = int(data_size/batch_size)
-
+    data_size = num_val_batches * batch_size
     prog = Progbar(target= num_val_batches)
     for i in range(num_val_batches):
         if i >= FLAGS.val_batch >= 0:
@@ -113,9 +113,9 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
         )
         f1_sum += f1
         em_sum += em
-        prog.update(i+1, [("F1", f1), ("em", em)])
+        prog.update(i+1, [("Avg F1", f1), ("Total EM", em), ("out of", (i+1)*batch_size)])
     print ""
-    logger.info("Evaluation: F1 Score: {}. EM Score: {}".format(f1_sum/batch_size, em_sum/batch_size))
+    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {}".format(f1_sum/batch_size, em_sum, data_size))
     return f1_sum/batch_size, em_sum/batch_size
 
 
@@ -153,7 +153,7 @@ def train():
                 train_epoch(train_data, model, session)
 
                 ### Evaluation
-                f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(epoch%FLAGS.print_text == 1))
+                f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
 
                 ### Checkpoint model
             train_writer.close()

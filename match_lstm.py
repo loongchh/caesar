@@ -109,7 +109,7 @@ class MatchLstmModel():
 
         with tf.variable_scope("Q_LSTM"):
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
 
             initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
 
@@ -122,7 +122,7 @@ class MatchLstmModel():
 
         with tf.variable_scope("P_LSTM"):
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
 
             initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
 
@@ -156,40 +156,40 @@ class MatchLstmModel():
             W_q =tf.get_variable(name='W_q',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.contrib.layers.xavier_initializer()
                                  )
             W_p =tf.get_variable(name='W_p',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             W_r =tf.get_variable(name='W_r',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_p =tf.get_variable(name='b_p',
                                  shape = [FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
             w =tf.get_variable(name='w',
                                  shape = [FLAGS.state_size, 1],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
             b =tf.get_variable(name='b',
                                  shape = (1,),
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
 
             hr = cell.zero_state(FLAGS.batch_size, tf.float32)
             Hr = []
@@ -250,35 +250,34 @@ class MatchLstmModel():
             V =tf.get_variable(name='V',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             W_a =tf.get_variable(name='W_a',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_a =tf.get_variable(name='b_a',
                                  shape = [FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
             v =tf.get_variable(name='v',
                                  shape = [FLAGS.state_size, 1],
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
             c =tf.get_variable(name='c',
                                  shape = (1,),
                                  dtype=tf.float32,
-                                 initializer=tf.truncated_normal_initializer(stddev=1e-4)
+                                 initializer=tf.constant_initializer(0.0)
                                  )
 
-
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
 
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
             betas = []
