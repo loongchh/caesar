@@ -106,13 +106,12 @@ def filter_data(questions, contexts, spans, exploded_spans):
     )
 
 
-def get_answer_from_span(span, add_end_index=False):
-    doc_size = FLAGS.max_document_size
+def get_answer_from_span(spans):
 
     def fun(s, e):
         s,e = (s, e) if s <= e else (e, s)
         return range(s,e+1)
-    return [fun(s[0], s[1]) for s in span]
+    return [fun(s[0], s[1]) for s in spans]
 
 
 def padding(data, max_length, zero_vector=0, include_one_padding_in_length=False):

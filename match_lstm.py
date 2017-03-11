@@ -328,14 +328,9 @@ class MatchLstmModel():
     def add_loss_op(self, answer_pointer_rep, debug_shape=False):
         betas = answer_pointer_rep[0]
 
-        if FLAGS.match_lstm_loss_type == "sequence":
-            masked_logits = tf.boolean_mask(betas, self.answer_mask_placeholder)
-            masked_labels = tf.boolean_mask(self.answer_placeholder, self.answer_mask_placeholder)
-            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(masked_logits,masked_labels))
-        else:
-            y = self.span_placeholder
-            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
-            # L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,diff,: ], y[:,1]))
+        masked_logits = tf.boolean_mask(betas, self.answer_mask_placeholder)
+        masked_labels = tf.boolean_mask(self.answer_placeholder, self.answer_mask_placeholder)
+        L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(masked_logits,masked_labels))
         return (L,) + answer_pointer_rep
 
     def add_training_op(self, loss, debug_shape=False):
