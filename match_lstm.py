@@ -244,7 +244,7 @@ class MatchLstmModel():
     ####################################
     def add_answer_pointer_op(self, match_lstm_rep, debug_shape=False):
         Hr = match_lstm_rep[0]
-        Hr = tf.concat(1, [tf.zeros(shape=[10,1,FLAGS.state_size]), Hr] )
+        Hr = tf.concat(1, [tf.zeros(shape=[FLAGS.batch_size,1,FLAGS.state_size]), Hr] )
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
