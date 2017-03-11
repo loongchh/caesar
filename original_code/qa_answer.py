@@ -5,21 +5,16 @@ from __future__ import print_function
 import io
 import os
 import json
-import sys
-import random
 from os.path import join as pjoin
+import logging
 
 from tqdm import tqdm
-import numpy as np
-from six.moves import xrange
 import tensorflow as tf
 
 from qa_model import Encoder, QASystem, Decoder
-from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
-    invert_map, tokenize, token_idx_map
-import qa_data
-
-import logging
+from code.preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url, \
+    tokenize
+import code.unused_code.qa_data
 
 logging.basicConfig(level=logging.INFO)
 
@@ -90,8 +85,8 @@ def read_dataset(dataset, tier, vocab):
                 question_tokens = tokenize(question)
                 question_uuid = qas[qid]['id']
 
-                context_ids = [str(vocab.get(w, qa_data.UNK_ID)) for w in context_tokens]
-                qustion_ids = [str(vocab.get(w, qa_data.UNK_ID)) for w in question_tokens]
+                context_ids = [str(vocab.get(w, code.qa_data.UNK_ID)) for w in context_tokens]
+                qustion_ids = [str(vocab.get(w, code.qa_data.UNK_ID)) for w in question_tokens]
 
                 context_data.append(' '.join(context_ids))
                 query_data.append(' '.join(qustion_ids))

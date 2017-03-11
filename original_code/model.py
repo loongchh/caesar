@@ -4,7 +4,7 @@ A model for Question Answer system
 import logging
 
 import tensorflow as tf
-import util
+import code.util
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -49,7 +49,7 @@ class QAModel(object):
         feed = self.create_feed_dict(data_batch)
 
         train_op_output = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
+            fetches = code.util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
         for i, tensor in enumerate(self.train_op):
@@ -59,7 +59,7 @@ class QAModel(object):
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
         decoded_representation = sess.run(
-            fetches = util.tuple_to_list(*self.decoded_representation),
+            fetches = code.util.tuple_to_list(*self.decoded_representation),
             feed_dict=feed
         )
         pred = decoded_representation[0]
@@ -69,7 +69,7 @@ class QAModel(object):
         feed = self.create_feed_dict(data_batch)
 
         train_op = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
+            fetches = code.util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
 

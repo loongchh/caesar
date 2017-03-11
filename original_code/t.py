@@ -1,10 +1,10 @@
 import logging, time
 import tensorflow as tf
 import numpy as np
-import qa_data_util as du
-import evaluate
-import parse_args
-from util import Progbar
+import code.qa_data_util as du
+import code.evaluate
+import code.parse_args
+from code.util import Progbar
 FLAGS = tf.app.flags.FLAGS
 
 from coattention_model import CoattentionModel
@@ -35,8 +35,8 @@ def evaluate_single(document, question, ground_truth_span, predicted_span, rev_v
         ground_truth = " ".join(ground_truth_tokens)
         if em:
             print predicted, document, question
-        f1 = evaluate.f1_score(predicted, ground_truth)
-        em = evaluate.exact_match_score(predicted, ground_truth)
+        f1 = code.evaluate.f1_score(predicted, ground_truth)
+        em = code.evaluate.exact_match_score(predicted, ground_truth)
         return f1, em
 
 
@@ -154,6 +154,6 @@ def debug_shape():
 
 
 if __name__ == "__main__":
-    parse_args.parse_args()
+    code.parse_args.parse_args()
     # debug_shape()
     train()

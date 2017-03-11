@@ -1,14 +1,15 @@
-import logging, time
+import logging
+import time
+
 import tensorflow as tf
-import numpy as np
+
 import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
-from tensorflow.python import debug as tf_debug
+
 FLAGS = tf.app.flags.FLAGS
 
-from coattention_model import CoattentionModel
 from match_lstm import MatchLstmModel
 
 logger = logging.getLogger("hw4")
