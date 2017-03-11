@@ -69,13 +69,20 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab):
 def evaluate_batch(data_batch, predicted_batch, rev_vocab):
     f1_sum = 0.
     em_sum = 0.
-    for i in range(len(data_batch['d'])):
+    for i in range(len(data_batch['q'])):
+        q = data_batch['q']
+        c = data_batch['c'][i]
+        gt = data_batch['gt'][i]
+        pred = predicted_batch[i]
+
         f1, em = evaluate_single(
-            document=data_batch['d'][i],
-            ground_truth=data_batch['gt'][i],
-            predicted=predicted_batch[i],
+            document=c,
+            ground_truth=gt,
+            predicted=pred,
             rev_vocab=rev_vocab
         )
+        if em:
+            print "!!!Correct Prediction for Passage:\n{} and Question:\n{}".format(c,q),
         f1_sum += f1
         em_sum += 1. if em else 0.
     return f1_sum/len(predicted_batch), em_sum/len(predicted_batch)
@@ -104,7 +111,6 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
 
 def train():
     vocab,rev_vocab = du.initialize_vocab()
-    # print vocab['<pad>']
 
     embeddings = du.load_embeddings()
     train_data = du.load_dataset(type = "train")
