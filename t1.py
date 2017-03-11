@@ -20,11 +20,11 @@ def train_epoch(train_data, model, session):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
     prog = Progbar(target=num_train_batches)
     for i in range(num_train_batches):
+        if i >= FLAGS.train_batch >= 0:
+            break
         data_batch = du.get_batch(train_data, i)
         loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         prog.update(i+1, [("train loss", loss)])
-        if i >= FLAGS.train_batch >= 0:
-            break
 
 
 # def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
@@ -70,6 +70,8 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab):
     f1_sum = 0.
     em_sum = 0.
     for i in range(len(data_batch['q'])):
+        if i >= FLAGS.val_batch >= 0:
+            break
         q = data_batch['q']
         c = data_batch['c'][i]
         gt = data_batch['gt'][i]
