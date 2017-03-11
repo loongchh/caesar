@@ -152,7 +152,7 @@ def train():
                 train_epoch(train_data, model, session)
 
                 ### Evaluation
-                f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(epoch%5 == 1))
+                f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(epoch%FLAGS.print_text == 1))
 
                 ### Checkpoint model
             train_writer.close()
