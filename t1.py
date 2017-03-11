@@ -106,7 +106,11 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
             break
         data_batch = du.get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
-        f1, em = evaluate_batch(data_batch=data_batch, predicted_batch=pred,rev_vocab=rev_vocab, print_answer_text)
+        f1, em = evaluate_batch(
+            data_batch=data_batch,
+            predicted_batch=pred,
+            rev_vocab=rev_vocab,
+            print_answer_text=print_answer_text)
         f1_sum += f1
         em_sum += em
         prog.update(i+1, [("F1", f1), ("em", em)])
