@@ -56,7 +56,7 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab):
         em = False
 
         ground_truth_tokens = [rev_vocab[document[index]] for index in ground_truth]
-        predicted_tokens = [rev_vocab[[document[index]]] for index in predicted if index < FLAGS.max_document_size]
+        predicted_tokens = [rev_vocab[document[index]] for index in predicted if index < FLAGS.max_document_size]
 
         predicted = " ".join(predicted_tokens)
         ground_truth = " ".join(ground_truth_tokens)

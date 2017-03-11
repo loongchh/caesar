@@ -32,18 +32,20 @@ def load_dataset(type='train', plot=False):
     questions = read_dataset(train_path_q)
     contexts = read_dataset(train_path_c)
     spans = read_dataset(train_path_a)
-    ## cast the data from string to int
+
+    # Assert data length
+    assert len(questions) == len(contexts) and  len(contexts) == len(spans)
+    logger.debug("loaded {} data of size {}".format(type, len(questions)))
+
+    # cast the data from string to int
     questions = cast_to_int(questions)
     contexts = cast_to_int(contexts)
     spans = cast_to_int(spans)
 
-    ## Flatten Answer span to obtain Ground Truth
+    # Flatten Answer span to obtain Ground Truth
     logger.debug("Sample Span {}".format(spans[0]))
     ground_truth = get_answer_from_span(spans)
-    logger.debug("Answer from span {}".format(ground_truth[0]))
-
-    assert len(questions) == len(contexts) and  len(contexts) == len(spans)
-    logger.debug("loaded {} data of size {}".format(type, len(questions)))
+    logger.debug("Flattened Answer from span {}".format(ground_truth[0]))
 
     if plot:
         plot_histogram(questions, "{}-questions".format(type))
