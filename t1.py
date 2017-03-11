@@ -51,22 +51,24 @@ def train_epoch(train_data, model, session):
 #         em = evaluate.exact_match_score(predicted, ground_truth)
 #         return f1, em
 
-def evaluate_single(document, ground_truth, predicted, rev_vocab):
+def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_text):
         f1 = 0
         em = False
 
         ground_truth_tokens = [rev_vocab[document[index]] for index in ground_truth]
         predicted_tokens = [rev_vocab[document[index]] for index in predicted if index < FLAGS.max_document_size]
 
-        predicted = " ".join(predicted_tokens)
-        ground_truth = " ".join(ground_truth_tokens)
-
-        f1 = evaluate.f1_score(predicted, ground_truth)
+        predicted_text = " ".join(predicted_tokens)
+        ground_truth_text = " ".join(ground_truth_tokens)
+        if print_answer_text:
+            logger.info("Ground truth: {}".format(ground_truth_text))
+            logger.info("Predicted Answer: {}".format(predicted_text))
+        f1 = evaluate.f1_score(predicted_text, ground_truth_text)
         em = evaluate.exact_match_score(predicted, ground_truth)
         return f1, em
 
 
-def evaluate_batch(data_batch, predicted_batch, rev_vocab):
+def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
     f1_sum = 0.
     em_sum = 0.
     for i in range(len(data_batch['q'])):
@@ -79,7 +81,8 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab):
             document=c,
             ground_truth=gt,
             predicted=pred,
-            rev_vocab=rev_vocab
+            rev_vocab=rev_vocab,
+            print_answer_text=print_answer_text
         )
         if em:
             print "!!!Correct Prediction for Passage:\n{} and Question:\n{}".format(c,q),
@@ -88,7 +91,7 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab):
     return f1_sum/len(predicted_batch), em_sum/len(predicted_batch)
 
 
-def evaluate_epoch(val_data, model, session, rev_vocab):
+def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
     logger.info("Dev Evaluation")
     f1_sum = 0
     em_sum = 0
@@ -103,7 +106,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
             break
         data_batch = du.get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
-        f1, em = evaluate_batch(data_batch=data_batch, predicted_batch=pred,rev_vocab=rev_vocab)
+        f1, em = evaluate_batch(data_batch=data_batch, predicted_batch=pred,rev_vocab=rev_vocab, print_answer_text)
         f1_sum += f1
         em_sum += em
         prog.update(i+1, [("F1", f1), ("em", em)])
@@ -146,7 +149,7 @@ def train():
                 train_epoch(train_data, model, session)
 
                 ### Evaluation
-                f1, em = evaluate_epoch(val_data, model, session, rev_vocab)
+                f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(epoch%5 == 1))
 
                 ### Checkpoint model
             train_writer.close()
