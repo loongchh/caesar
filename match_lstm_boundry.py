@@ -152,8 +152,20 @@ class MatchLstmBoundryModel():
     def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
         H_Q = preprocessing_rep[0]
         H_P = tf.unpack(preprocessing_rep[1])
+        fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd',debug_shape=debug_shape)
+        rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev',debug_shape=debug_shape)
 
-        with tf.variable_scope("Match_LSTM"):
+        Hr = tf.concat(2, [fwd[0], rev[0]])
+        match_lstm_rep = (Hr,)
+        if debug_shape:
+            return match_lstm_rep + (tf.shape(Hr,name="debug_MLL_Hr"),) + fwd + rev + preprocessing_rep
+        return match_lstm_rep + preprocessing_rep
+
+    #  Match LSTM Forward/Bacward Layer #########
+    def match_lstm_direction_op(self, H_P, H_Q, direction, debug_shape=False):
+        if direction == "rev":
+            tf.reverse(H_P, [True, False, False])
+        with tf.variable_scope("Match_LSTM_{}".format(direction)):
             W_q =tf.get_variable(name='W_q',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
@@ -224,21 +236,21 @@ class MatchLstmBoundryModel():
         match_lstm_rep = (Hr,)
         if debug_shape:
             return match_lstm_rep + (
-                tf.shape(H_P,name="debug_MLL_HP"),
-                tf.shape(H_Q,name="debug_MLL_HQ"),
-                tf.shape(H_P[0],name="debug_MLL_HP0"),
-                tf.shape(Wq_HQ,name="debug_MLL_Wq_HQ"),
-                tf.shape(Wp_HPi,name="debug_MLL_Wp_HPi"),
-                tf.shape(Wr_Hr,name="debug_MLL_Wr_Hr"),
-                tf.shape(Gi,name="debug_MLL_Gi"),
-                tf.shape(wt_Gi,name="debug_MLL_wt_Gi"),
-                tf.shape(alphai,name="debug_MLL_alphai"),
-                tf.shape(HQ_alphai,name="debug_MLL_HQ_alphai"),
-                tf.shape(zi,name="debug_MLL_zi"),
-                tf.shape(Hr,name="debug_MLL_Hr"),
-            ) + preprocessing_rep
+                tf.shape(H_P,name="debug_MLL_{}_HP".format(direction)),
+                tf.shape(H_Q,name="debug_MLL_{}_HQ".format(direction)),
+                tf.shape(H_P[0],name="debug_MLL_{}_HP0".format(direction)),
+                tf.shape(Wq_HQ,name="debug_MLL_{}_Wq_HQ".format(direction)),
+                tf.shape(Wp_HPi,name="debug_MLL_{}_Wp_HPi".format(direction)),
+                tf.shape(Wr_Hr,name="debug_MLL_{}_Wr_Hr".format(direction)),
+                tf.shape(Gi,name="debug_MLL_{}_Gi".format(direction)),
+                tf.shape(wt_Gi,name="debug_MLL_{}_wt_Gi".format(direction)),
+                tf.shape(alphai,name="debug_MLL_{}_alphai".format(direction)),
+                tf.shape(HQ_alphai,name="debug_MLL_{}_HQ_alphai".format(direction)),
+                tf.shape(zi,name="debug_MLL_{}_zi".format(direction)),
+                tf.shape(Hr,name="debug_MLL_{}_Hr".format(direction)),
+            )
 
-        return match_lstm_rep + preprocessing_rep
+        return match_lstm_rep
 
     ####################################
     ##### Answer Pointer Layer #########
@@ -248,7 +260,7 @@ class MatchLstmBoundryModel():
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
+                                 shape = [2*FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
                                  initializer=tf.contrib.layers.xavier_initializer()
                                  )
@@ -297,11 +309,11 @@ class MatchLstmBoundryModel():
 
                 betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size]))
                 betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size])
-            #
-                Hr_betak = tf.einsum('ijk,ikl->ijl', betak_, Hr)
-                Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, FLAGS.state_size])
 
-            #
+                Hr_betak = tf.einsum('ijk,ikl->ijl', betak_, Hr)
+                Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, 2*FLAGS.state_size])
+
+
                 betas.append(betak)
                 _, ha = cell(Hr_betak, ha)
 
@@ -311,7 +323,7 @@ class MatchLstmBoundryModel():
 
         answer_pointer_rep = (betas, pred)
         if debug_shape:
-            return answer_pointer_rep + (
+            return answer_pointer_rep+(
                 tf.shape(V_Hr,name="debug_APL_V_Hr"),
                 tf.shape(Fk,name="debug_APL_Fk"),
                 tf.shape(vt_Fk,name="debug_APL_vt_fk"),
@@ -321,8 +333,7 @@ class MatchLstmBoundryModel():
                 tf.shape(pred,name="debug_APL_pred"),
             ) + match_lstm_rep
 
-        return answer_pointer_rep + match_lstm_rep
-
+        return  answer_pointer_rep + match_lstm_rep
 
     def add_loss_op(self, answer_pointer_rep, debug_shape=False):
         betas = answer_pointer_rep[0]
