@@ -99,6 +99,8 @@ class MatchLstmModel():
         return question_embeddings, document_embeddings
 
     def add_char_embedding(self):
+        """ Rewritten from https://github.com/allenai/bi-att-flow
+        """
         char_emb_mat = tf.get_variable("char_emb_mat", shape=[FLAGS.char_vocab_size, FLAGS.char_emb_size], dtype='float')
 
         question_embeddings = tf.nn.embedding_lookup(params=char_emb_mat, ids=self.question_placeholder)
@@ -119,6 +121,8 @@ class MatchLstmModel():
         return (X_q, X_d)
 
     def highway_layer(arg, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+        """ From https://github.com/allenai/bi-att-flow
+        """
         with tf.variable_scope(scope or "highway_layer"):
         d = arg.get_shape()[-1]
         trans = linear([arg], d, bias, bias_start=bias_start, scope='trans', wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
@@ -129,6 +133,8 @@ class MatchLstmModel():
         return out
 
     def highway_network(arg, num_layers, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
+        """ From https://github.com/allenai/bi-att-flow
+        """
         with tf.variable_scope(scope or "highway_network"):
             prev = arg
             cur = None
@@ -139,6 +145,8 @@ class MatchLstmModel():
             return cur
 
     def conv1d(in_, filter_size, height, padding, is_train=None, keep_prob=1.0, scope=None):
+        """ From https://github.com/allenai/bi-att-flow
+        """
         with tf.variable_scope(scope or "conv1d"):
         num_channels = in_.get_shape()[-1]
         filter_ = tf.get_variable("filter", shape=[1, height, num_channels, filter_size], dtype='float')
@@ -151,6 +159,8 @@ class MatchLstmModel():
         return out
 
     def multi_conv1d(in_, filter_sizes, heights, padding, is_train=None, keep_prob=1.0, scope=None):
+        """ From https://github.com/allenai/bi-att-flow
+        """
         with tf.variable_scope(scope or "multi_conv1d"):
             assert len(filter_sizes) == len(heights)
             outs = []
