@@ -329,8 +329,9 @@ class MatchLstmModel():
         betas = answer_pointer_rep[0]
 
         if FLAGS.match_lstm_loss_type == "sequence":
-            y = self.answer_placeholder
-            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas, y))
+            masked_logits = tf.boolean_mask(betas, self.answer_mask_placeholder)
+            masked_labels = tf.boolean_mask(self.answer_placeholder, self.answer_mask_placeholder)
+            L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(masked_logits,masked_labels))
         else:
             y = self.span_placeholder
             L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))

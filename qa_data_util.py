@@ -63,7 +63,7 @@ def load_dataset(type='train', plot=False):
 
     questions, questions_mask, questions_seq = padding(questions, 15)
     contexts, contexts_mask, contexts_seq = padding(contexts, 120)
-    answers, answers_mask, answers_seq = padding(ground_truth, 6, zero_vector=120)
+    answers, answers_mask, answers_seq = padding(ground_truth, 6, zero_vector=120, include_one_padding_in_length=True)
 
     if plot:
         plot_histogram(contexts, "{}-contexts-padded".format(type))
@@ -115,9 +115,12 @@ def get_answer_from_span(span, add_end_index=False):
     return [fun(s[0], s[1]) for s in span]
 
 
-def padding(data, max_length, zero_vector=0):
+def padding(data, max_length, zero_vector=0, include_one_padding_in_length=False):
     seq = [len(record) for record in data]
-    mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
+    if include_one_padding_in_length:
+        mask = [min(len(record)+1, max_length)*[True] + (max_length - len(record)-1)*[False] for record in data]
+    else:
+        mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
     data = [record[:max_length] + (max_length - len(record))*[zero_vector] for record in data]
 
     return data, mask,seq
