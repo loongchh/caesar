@@ -61,9 +61,16 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_t
 
         predicted_text = " ".join(predicted_tokens)
         ground_truth_text = " ".join(ground_truth_tokens)
-        if print_answer_text:
+
+        if em:
+            logger.info("--------Match!!--------------")
             logger.info("Ground truth: {}".format(ground_truth_text))
             logger.info("Predicted Answer: {}".format(predicted_text))
+            logger.info("-----------------------------")
+        elif print_answer_text:
+            logger.info("Ground truth: {}".format(ground_truth_text))
+            logger.info("Predicted Answer: {}".format(predicted_text))
+
         f1 = evaluate.f1_score(predicted_text, ground_truth_text)
         em = evaluate.exact_match_score(predicted_text, ground_truth_text)
         return f1, em
@@ -83,10 +90,12 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
             ground_truth=gt,
             predicted=pred,
             rev_vocab=rev_vocab,
-            print_answer_text=print_answer_text
+            print_answer_text=print_answer_text and (i % 5 ==1)
         )
         f1_sum += f1
         em_sum += 1. if em else 0.
+
+
     return f1_sum/len(predicted_batch), em_sum
 
 
@@ -99,7 +108,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
     data_size = len(val_data['q'])
     num_val_batches = int(data_size/batch_size)
     data_size = num_val_batches * batch_size
-    prog = Progbar(target= num_val_batches)
+    # prog = Progbar(target= num_val_batches)
     for i in range(num_val_batches):
         if i >= FLAGS.val_batch >= 0:
             break
@@ -109,13 +118,13 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
             data_batch=data_batch,
             predicted_batch=pred,
             rev_vocab=rev_vocab,
-            print_answer_text=(print_answer_text and i%17==1)
+            print_answer_text=(print_answer_text)
         )
         f1_sum += f1
         em_sum += em
-        prog.update(i+1, [("Avg F1", f1), ("Total EM", em), ("out of", (i+1)*batch_size)])
+        # prog.update(i+1, [("Avg F1", f1)])
     print ""
-    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {}".format(f1_sum/batch_size, em_sum, data_size))
+    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/batch_size, em_sum, data_size))
     return f1_sum/batch_size, em_sum/batch_size
 
 
