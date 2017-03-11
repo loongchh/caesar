@@ -70,8 +70,6 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab):
     f1_sum = 0.
     em_sum = 0.
     for i in range(len(data_batch['q'])):
-        if i >= FLAGS.val_batch >= 0:
-            break
         q = data_batch['q']
         c = data_batch['c'][i]
         gt = data_batch['gt'][i]
@@ -101,6 +99,8 @@ def evaluate_epoch(val_data, model, session, rev_vocab):
 
     prog = Progbar(target= num_val_batches)
     for i in range(num_val_batches):
+        if i >= FLAGS.val_batch >= 0:
+            break
         data_batch = du.get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
         f1, em = evaluate_batch(data_batch=data_batch, predicted_batch=pred,rev_vocab=rev_vocab)
@@ -180,5 +180,6 @@ def debug_shape():
 
 if __name__ == "__main__":
     parse_args.parse_args()
-    debug_shape()
+    if FLAGS.debug_shape():
+        debug_shape()
     train()
