@@ -351,6 +351,10 @@ class MatchLstmBoundryModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
+        logger.info("loss: {}".format(train_op_output[1]))
+        # logger.info("betas: {}".format(train_op_output[2]))
+        logger.info("pred: {}".format(train_op_output[3]))
+
         for i, tensor in enumerate(self.train_op):
             if tensor.name.startswith("debug_"):
                 logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
@@ -361,7 +365,7 @@ class MatchLstmBoundryModel():
             fetches = util.tuple_to_list(*self.answer_pointer_rep),
             feed_dict=feed
         )
-        pred = du.get_answer_from_span(answer_pointer_rep[1])
+        pred = du.get_answer_from_span(answer_pointer_rep[2])
         return pred
 
     def train_on_batch(self, sess, data_batch):
@@ -373,6 +377,6 @@ class MatchLstmBoundryModel():
         )
 
         loss = train_op[1]
-        pred = du.get_answer_from_span(train_op[2])
+        pred = du.get_answer_from_span(train_op[3])
 
         return loss, pred
