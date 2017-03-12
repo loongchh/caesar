@@ -1,3 +1,9 @@
+import numpy as np
+a = np.array([0,0])
+for d in a:
+    print(d)
+print np.sum([1, 1])
+print np.all(a==0)
 a=1
 b=2
 print a,b

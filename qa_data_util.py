@@ -12,9 +12,17 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.840B.300.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
-    logger.debug("loaded glove embeddings of vocab size: {}".format(len(embeddings)))
+    vocab, rev_vocab = initialize_vocab()
+    for word in vocab:
+        if word[0].islower():
+            w = word[0].upper() + word[1:]
+            if w in vocab:
+                embeddings[vocab[w]] = embeddings[vocab[word]]
+    zeros = np.sum([1 for x in embeddings if np.all(x==0)])
+    logger.debug("loaded glove embeddings of vocab size: {} with {} zero vector".format(len(embeddings), zeros))
+
     return embeddings
 
 
@@ -167,8 +175,8 @@ if __name__ == '__main__':
     parse_args.parse_args()
 
 
-    # embeddings = load_embeddings()
-    # vocab, rev_vocab = initialize_vocab()
+    embeddings = load_embeddings()
+    vocab, rev_vocab = initialize_vocab()
     # for word in vocab:
     #     if word[0].islower():
     #         w = word[0].upper() + word[1:]
@@ -179,8 +187,5 @@ if __name__ == '__main__':
     #
     # print embeddings[vocab['Who']]
     # exit()
-
-    # test_clip_and_pad()
-
     train_data = load_dataset(type = "train", plot=True)
     val_data = load_dataset(type = "val", plot=True)
