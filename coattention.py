@@ -94,7 +94,7 @@ class CoattentionModel():
         assertion("Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
         assertion("D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
 
-        # Add sentinel to the end of document.
+        # Add sentinel to the end of document/question.
         Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
         D = tf.concat_v2([D, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
 
@@ -138,97 +138,22 @@ class CoattentionModel():
         # Fusion of temporal information to the coattention context
         coatt = tf.concat_v2([D, Cd], 2)
         assertion("coatt", [FLAGS.batch_size, FLAGS.max_document_size + 1, 3 * FLAGS.state_size])
-
         with tf.variable_scope("COATTENTION"):
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32)
-            U = tf. concat_v2(U, 2)
+            U = tf.concat_v2(U, 2)
         
         assertion("U", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
 
 
     ## ==============================
     ## DYNAMIC POINTING DECODER
-    def add_answer_pointer_op(self, match_lstm_rep, debug_shape=False):
-        Hr = match_lstm_rep[0]
+    def add_dynamic_pointer_op(self, coattention, debug_shape=False):
+        U = coattention
 
-        with tf.variable_scope("ANSWER_POINTER"):
-            V =tf.get_variable(name='V',
-                                 shape = [2*FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
-
-            W_a =tf.get_variable(name='W_a',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
-
-            b_a =tf.get_variable(name='b_a',
-                                 shape = [FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
-
-            v =tf.get_variable(name='v',
-                                 shape = [FLAGS.state_size, 1],
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
-
-            c =tf.get_variable(name='c',
-                                 shape = (1,),
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
-
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-
-            ha = cell.zero_state(FLAGS.batch_size, tf.float32)
-            betas = []
-            for k in range(2):
-                if k > 0:
-                    tf.get_variable_scope().reuse_variables()
-                V_Hr = tf.einsum('ijk,kl->ijl', Hr, V)
-                Wa_Ha = tf.matmul(ha[1], W_a)
-                Fk = Wa_Ha + b_a
-                Fk = tf.reshape(
-                    tensor=tf.tile(Fk, [1,FLAGS.max_document_size]),
-                    shape=[FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size]
-                )
-                Fk = tf.nn.tanh(Fk + V_Hr)
-
-                vt_Fk = tf.reshape(tf.einsum('ijk,kl->ijl', Fk, v),[FLAGS.batch_size, FLAGS.max_document_size])
-
-                betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size]))
-                betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size])
-
-                Hr_betak = tf.einsum('ijk,ikl->ijl', betak_, Hr)
-                Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, 2*FLAGS.state_size])
-
-
-                betas.append(betak)
-                _, ha = cell(Hr_betak, ha)
-
-            betas = tf.pack(betas, 1)
-
-        pred = tf.argmax(betas,2)
-
-        answer_pointer_rep = (betas, pred)
-        if debug_shape:
-            return answer_pointer_rep+(
-                tf.shape(V_Hr,name="debug_APL_V_Hr"),
-                tf.shape(Fk,name="debug_APL_Fk"),
-                tf.shape(vt_Fk,name="debug_APL_vt_fk"),
-                tf.shape(betak,name="debug_APL_betak"),
-                tf.shape(Hr_betak,name="debug_APL_Hr_betak"),
-                tf.shape(betas,name="debug_APL_betas"),
-                tf.shape(pred,name="debug_APL_pred"),
-            ) + match_lstm_rep
-
-        return  answer_pointer_rep + match_lstm_rep
+        
+    def highway_maxout()
 
     def add_loss_op(self, answer_pointer_rep, debug_shape=False):
         betas = answer_pointer_rep[0]
@@ -246,7 +171,7 @@ class CoattentionModel():
         self.add_placeholders()
         self.preprocessing_rep = self.add_preprocessing_op(debug_shape)
         self.match_lstm_rep = self.add_coattention_op(self.preprocessing_rep, debug_shape)
-        self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
+        self.answer_pointer_rep = self.add_dynamic_pointer_op(self.match_lstm_rep, debug_shape)
         self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
