@@ -12,8 +12,11 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.840B.300.npz".format(FLAGS.vocab_dim))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
+    print embeddings.dtype
+    embeddings=embeddings.astype(np.float32)
+    print embeddings.dtype
     vocab, rev_vocab = initialize_vocab()
     for word in vocab:
         if word[0].islower():
@@ -161,9 +164,12 @@ def initialize_vocab():
         raise ValueError("Vocabulary file %s not found.", vocab_path)
 
 
-def get_batch(data, i):
+def get_batch(data, i, permutation=None):
     start = i*FLAGS.batch_size
     end = (i+1)*FLAGS.batch_size
+
+    # if permutation is not None:
+    #     indices =
 
     batch = {}
     for k in data:

@@ -37,8 +37,8 @@ def train_epoch(train_data, model, session):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i)
-        loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
-        prog.update(i+1, [("train loss", loss)])
+        grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
+        prog.update(i+1, [("grad_norm",grad_norm), ("train loss", loss)])
     print ""
 
 

@@ -90,9 +90,7 @@ class MatchLstmBoundryModel():
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.cast(
-            tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float64),
-            tf.float32)
+        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
@@ -333,7 +331,7 @@ class MatchLstmBoundryModel():
                 tf.shape(pred,name="debug_APL_pred"),
             ) + match_lstm_rep
 
-        return  answer_pointer_rep + match_lstm_rep
+        return answer_pointer_rep + match_lstm_rep
 
     def add_loss_op(self, answer_pointer_rep, debug_shape=False):
         betas = answer_pointer_rep[0]
@@ -343,9 +341,17 @@ class MatchLstmBoundryModel():
         return ((L1+L2)/2.0,) + answer_pointer_rep
 
     def add_training_op(self, loss, debug_shape=False):
-        train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
+        optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
 
-        return (train_op,) + loss
+        gradients = optimizer.compute_gradients(loss[0])
+        (grad, var) = zip(*gradients)
+
+        (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+
+        grad_norm = tf.global_norm(grad)
+        train_op = optimizer.apply_gradients(zip(grad, var))
+
+        return (train_op,grad_norm) + loss
 
     def build(self, debug_shape):
         self.add_placeholders()
@@ -362,9 +368,8 @@ class MatchLstmBoundryModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
-        logger.info("loss: {}".format(train_op_output[1]))
-        # logger.info("betas: {}".format(train_op_output[2]))
-        logger.info("pred: {}".format(train_op_output[3]))
+        logger.info("loss: {}".format(train_op_output[2]))
+        logger.info("pred: {}".format(train_op_output[4]))
 
         for i, tensor in enumerate(self.train_op):
             if tensor.name.startswith("debug_"):
@@ -387,7 +392,8 @@ class MatchLstmBoundryModel():
             feed_dict=feed
         )
 
-        loss = train_op[1]
-        pred = du.get_answer_from_span(train_op[3])
+        grad_norm = train_op[2]
+        loss = train_op[3]
+        pred = du.get_answer_from_span(train_op[4])
 
-        return loss, pred
+        return grad_norm, loss, pred
