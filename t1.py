@@ -1,12 +1,14 @@
 import logging
 import time
 
+import numpy as np
 import tensorflow as tf
 
 import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
+import matplotlib.pyplot as plt
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -33,13 +35,17 @@ def choose_model(embeddings, debug_shape=False):
 def train_epoch(train_data, model, session):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
     prog = Progbar(target=num_train_batches)
+    losses, grad_norms = [], []
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i)
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
-        prog.update(i+1, [("grad_norm",grad_norm), ("train loss", loss)])
+        losses.append(loss)
+        grad_norms.append(grad_norm)
+        prog.update(i+1, [("train loss", loss)])
     print ""
+    return grad_norms, losses
 
 
 # def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
@@ -162,26 +168,62 @@ def train():
             # session = tf_debug.LocalCLIDebugWrapperSession(session)
             # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
-            train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
-            session.run(init)
+            # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
+            # session.run(init)
 
-            # for epoch in range(100):
+            losses, grad_norms = [], []
             for epoch in range(FLAGS.epochs):
 
-                run_metadata = tf.RunMetadata()
-                train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
+                # run_metadata = tf.RunMetadata()
+                # train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
+
                 logger.info("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
                 ### Training
-                train_epoch(train_data, model, session)
-
+                grad_norm, loss = train_epoch(train_data, model, session)
+                losses.append(loss)
+                grad_norms.append(grad_norm)
                 ### Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
 
                 ### Checkpoint model
-            train_writer.close()
+            losses, grad_norms = np.array(losses), np.array(grad_norms)
+            make_prediction_plot(losses, grad_norms)
+
+            # train_writer.close()
 
     logger.info("Model did not crash!")
     logger.info("Passed!")
+
+
+def make_prediction_plot(losses, grad_norms):
+    plt.subplot(2, 1, 1)
+    plt.title("Loss")
+    plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
+    plt.ylabel("Loss")
+
+    plt.subplot(2, 1, 2)
+    plt.plot(np.arange(grad_norms.size), grad_norms.flatten(), label="Gradients")
+    plt.ylabel("Gradients")
+    plt.xlabel("Minibatch")
+    output_path = "../plots/train.png"
+    plt.savefig(output_path)
+
+
+def log_total_parametes():
+
+    total_parameters = 0
+    for variable in tf.trainable_variables():
+        # shape is an array of tf.Dimension
+        shape = variable.get_shape()
+        # print(shape)
+        # print(len(shape))
+        variable_parametes = 1
+        for dim in shape:
+            # print(dim)
+            variable_parametes *= dim.value
+        # print(variable_parametes)
+        total_parameters += variable_parametes
+    logger.info("total parameters: {}".format(total_parameters))
 
 
 def debug_shape():
@@ -195,20 +237,9 @@ def debug_shape():
         start = time.time()
         model = choose_model(embeddings=embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
+
         init = tf.global_variables_initializer()
-        total_parameters = 0
-        for variable in tf.trainable_variables():
-            # shape is an array of tf.Dimension
-            shape = variable.get_shape()
-            print(shape)
-            print(len(shape))
-            variable_parametes = 1
-            for dim in shape:
-                print(dim)
-                variable_parametes *= dim.value
-            print(variable_parametes)
-            total_parameters += variable_parametes
-        print(total_parameters)
+        log_total_parametes()
 
         with tf.Session() as session:
             session.run(init)

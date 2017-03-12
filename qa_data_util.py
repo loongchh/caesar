@@ -14,9 +14,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 def load_embeddings():
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
-    print embeddings.dtype
     embeddings=embeddings.astype(np.float32)
-    print embeddings.dtype
     vocab, rev_vocab = initialize_vocab()
     for word in vocab:
         if word[0].islower():
@@ -70,7 +68,6 @@ def load_dataset(type='train', plot=False):
         plot_histogram(contexts, "{}-contexts-filtered".format(type))
         plot_histogram(questions, "{}-questions-filtered".format(type))
         plot_histogram(ground_truth, "{}-answers-filtered".format(type))
-
 
     questions, questions_mask, questions_seq = padding(questions, 15)
     contexts, contexts_mask, contexts_seq = padding(contexts, 120)

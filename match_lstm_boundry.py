@@ -351,7 +351,7 @@ class MatchLstmBoundryModel():
         grad_norm = tf.global_norm(grad)
         train_op = optimizer.apply_gradients(zip(grad, var))
 
-        return (train_op,grad_norm) + loss
+        return (train_op,grad_norm) + loss + (tf.shape(grad_norm, name="debug_norm_shape"),)
 
     def build(self, debug_shape):
         self.add_placeholders()
