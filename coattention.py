@@ -77,149 +77,53 @@ class CoattentionModel():
 
         return question_embeddings, document_embeddings
 
-    # ===============================
-    # DOCUMENT AND QUESTION ENCODER
+    ## ==============================
+    ## DOCUMENT AND QUESTION ENCODER
     def add_preprocessing_op(self, debug_shape=False):
 
-        (q_input, d_input) = self.add_embedding()
+        (q_embed, d_embed) = self.add_embedding()
         dropout_rate = self.dropout_placeholder
 
-        with tf.variable_scope("BLSTM"):
-            cell_fw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
-            cell_bw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
-            initial_state_fw = cell_fw.zero_state(FLAGS.batch_size, tf.float32)
-            initial_state_bw = cell_bw.zero_state(FLAGS.batch_size, tf.float32)
-
-            ((output_fw, output_bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, q_input,
-                                                                          sequence_length=self.question_seq_placeholder,
-                                                                          initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw)
-            Q = tf.concat(3, output_fw, output_bw)
-
+        with tf.variable_scope("QDENCODE"):
+            # Encoding question and document
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
+            (D, _) = tf.nn.dynamic_rnn(cell, d_embed)
             tf.get_variable_scope().reuse_variables()
-            ((output_fw, output_bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, d_input,
-                                                                          sequence_length=self.question_seq_placeholder,
-                                                                          initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw)
-            D = tf.concat(3, output_fw, output_bw)
+            (Q, _) = tf.nn.dynamic_rnn(cell, q_embed)
 
-            Wq = tf.get_variable("Wq", shape=(2 * FLAGS.state_size, 2 * FLAGS.state_size)
+        # Add sentinel to the end of document
+        D = tf.concat_v2([D, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
+        Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
+
+        with tf.variable_scope("QTANH"):
+            # Non-linear projection layer on top of the question encoding
+            Wq = tf.get_variable("Wq", shape=(FLAGS.state_size, FLAGS.state_size)
                                  dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            bq = tf.get_variable("bq", shape=(2 * FLAGS.state_size)
+            bq = tf.get_variable("bq", shape=(FLAGS.state_size)
                                  dtype=tf.float32, initializer=tf.constant_initializer(0.))
-            Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, Wq) + bq)
+            Q = tf.tanh(tf.matmul(Q, Wq) + bq)
 
-            assertion("Q", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
-            assertion("D", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+        assertion("Q", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
+        assertion("D", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.state_size])
 
         return (D, Q)
 
-    # =============================
-    # COATTENTION ENCODER
-    def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
-        D = preprocessing_rep[0]
-        Q = preprocessing_rep[1]
-        fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd',debug_shape=debug_shape)
-        rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev',debug_shape=debug_shape)
+    ## ==============================
+    ## COATTENTION ENCODER
+    def add_coattention_op(self, preprocessing, debug_shape=False):
+        D = preprocessing[0]
+        Q = preprocessing[1]
 
-        Hr = tf.concat(2, [fwd[0], rev[0]])
-        match_lstm_rep = (Hr,)
-        if debug_shape:
-            return match_lstm_rep + (tf.shape(Hr,name="debug_MLL_Hr"),) + fwd + rev + preprocessing_rep
-        return match_lstm_rep + preprocessing_rep
+        # Affinity matrix
+        L = tf.matmul(D, tf.transpose(Q))
+        assertion("L", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
 
-    #  Match LSTM Forward/Bacward Layer #########
-    def match_lstm_direction_op(self, H_P, H_Q, direction, debug_shape=False):
-        if direction == "rev":
-            tf.reverse(H_P, [True, False, False])
-        with tf.variable_scope("Match_LSTM_{}".format(direction)):
-            W_q =tf.get_variable(name='W_q',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
-            W_p =tf.get_variable(name='W_p',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
-
-            W_r =tf.get_variable(name='W_r',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
-
-            b_p =tf.get_variable(name='b_p',
-                                 shape = [FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
-
-            w =tf.get_variable(name='w',
-                                 shape = [FLAGS.state_size, 1],
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
-
-            b =tf.get_variable(name='b',
-                                 shape = (1,),
-                                 dtype=tf.float32,
-                                 initializer=tf.constant_initializer(0.0)
-                                 )
+        # 
+        Aq = tf.
 
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-
-            hr = cell.zero_state(FLAGS.batch_size, tf.float32)
-            Hr = []
-            for i, H_Pi in enumerate(H_P):
-                if i>0:
-                    tf.get_variable_scope().reuse_variables()
-                Wq_HQ = tf.einsum('ijk,kl->ijl', H_Q, W_q)
-                Wp_HPi = tf.matmul(H_P[i], W_p)
-                Wr_Hr = tf.matmul(hr[1], W_r)
-                Gi = Wp_HPi + Wr_Hr + b_p
-                Gi = tf.reshape(
-                    tensor=tf.tile(Gi, [1,FLAGS.max_question_size]),
-                    shape=[FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size]
-                )
-                Gi = tf.nn.tanh(Gi + Wq_HQ)
-                wt_Gi = tf.reshape(tf.einsum('ijk,kl->ijl', Gi, w),[FLAGS.batch_size, FLAGS.max_question_size])
-
-                alphai = tf.nn.softmax(wt_Gi + tf.tile(b, [FLAGS.max_question_size]))
-                alphai = tf.reshape(alphai,[FLAGS.batch_size, 1,FLAGS.max_question_size])
-
-                HQ_alphai = tf.einsum('ijk,ikl->ijl', alphai, H_Q)
-                HQ_alphai = tf.reshape(HQ_alphai, [FLAGS.batch_size, FLAGS.state_size])
-
-                zi = tf.concat(1, [H_P[i], HQ_alphai])
-
-                _, hr = cell(zi, hr)
-                Hr.append(hr[1])
-
-            Hr = tf.pack(Hr,1)
-
-        match_lstm_rep = (Hr,)
-        if debug_shape:
-            return match_lstm_rep + (
-                tf.shape(H_P,name="debug_MLL_{}_HP".format(direction)),
-                tf.shape(H_Q,name="debug_MLL_{}_HQ".format(direction)),
-                tf.shape(H_P[0],name="debug_MLL_{}_HP0".format(direction)),
-                tf.shape(Wq_HQ,name="debug_MLL_{}_Wq_HQ".format(direction)),
-                tf.shape(Wp_HPi,name="debug_MLL_{}_Wp_HPi".format(direction)),
-                tf.shape(Wr_Hr,name="debug_MLL_{}_Wr_Hr".format(direction)),
-                tf.shape(Gi,name="debug_MLL_{}_Gi".format(direction)),
-                tf.shape(wt_Gi,name="debug_MLL_{}_wt_Gi".format(direction)),
-                tf.shape(alphai,name="debug_MLL_{}_alphai".format(direction)),
-                tf.shape(HQ_alphai,name="debug_MLL_{}_HQ_alphai".format(direction)),
-                tf.shape(zi,name="debug_MLL_{}_zi".format(direction)),
-                tf.shape(Hr,name="debug_MLL_{}_Hr".format(direction)),
-            )
-
-        return match_lstm_rep
-
-    ####################################
-    ##### Answer Pointer Layer #########
-    ####################################
+    ## ==============================
+    ## DYNAMIC POINTING DECODER
     def add_answer_pointer_op(self, match_lstm_rep, debug_shape=False):
         Hr = match_lstm_rep[0]
 
@@ -315,7 +219,7 @@ class CoattentionModel():
     def build(self, debug_shape):
         self.add_placeholders()
         self.preprocessing_rep = self.add_preprocessing_op(debug_shape)
-        self.match_lstm_rep = self.add_match_lstm_op(self.preprocessing_rep, debug_shape)
+        self.match_lstm_rep = self.add_coattention_op(self.preprocessing_rep, debug_shape)
         self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
         self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
