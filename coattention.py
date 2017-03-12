@@ -12,55 +12,38 @@ logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
+def assertion(var_name, expected):
+    shape = eval(var_name).get_shape().as_list()
+    assert shape == expected \
+        "{} of incorrect shape. Expected {}, got {}".format(var_name, expected, shape)
 
-class MatchLstmBoundryModel():
-
+class CoattentionModel():
     def __init__(self, embeddings, debug_shape=False):
         self.pretrained_embeddings = embeddings
         self.build(debug_shape)
 
-
     def add_placeholders(self):
-        self.question_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size, FLAGS.max_question_size),
-                                                name="question_placeholder")
-        self.question_mask_placeholder = tf.placeholder(tf.bool,
-                                                shape=(FLAGS.batch_size, FLAGS.max_question_size),
-                                                name="question_mask_placeholder")
-
-        self.question_seq_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size),
-                                                name="question_seq_placeholder")
-
-        self.document_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size, FLAGS.max_document_size),
-                                                name="document_placeholder")
-
-        self.document_mask_placeholder = tf.placeholder(tf.bool,
-                                                shape=(FLAGS.batch_size, FLAGS.max_document_size),
-                                                name="document_mask_placeholder")
-
-        self.document_seq_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size),
-                                                name="document_seq_placeholder")
-
-        self.span_placeholder = tf.placeholder(tf.int32,
-                                               shape=(FLAGS.batch_size, 2),
+        self.question_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_question_size),
+                                                   name="question_placeholder")
+        self.question_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_question_size),
+                                                        name="question_mask_placeholder")
+        self.question_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size),
+                                                       name="question_seq_placeholder")
+        self.document_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_document_size),
+                                                   name="document_placeholder")
+        self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_document_size),
+                                                        name="document_mask_placeholder")
+        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size),
+                                                       name="document_seq_placeholder")
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, 2),
                                                name="span_placeholder")
-
-        self.answer_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
-                                                        name="answer_placeholder")
-
-        self.answer_mask_placeholder = tf.placeholder(tf.bool,
-                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
-                                                        name="answer_mask_placeholder")
-        self.answer_seq_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, ),
-                                                        name="answer_seq_placeholder")
-
-        self.dropout_placeholder = tf.placeholder(tf.float32,
-                                                  name="dropout_placeholder")
+        self.answer_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+                                                 name="answer_placeholder")
+        self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+                                                      name="answer_mask_placeholder")
+        self.answer_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, ),
+                                                     name="answer_seq_placeholder")
+        self.dropout_placeholder = tf.placeholder(tf.float32, name="dropout_placeholder")
 
     def create_feed_dict(self, data_batch, dropout=1):
         feed_dict = {
@@ -76,16 +59,12 @@ class MatchLstmBoundryModel():
             feed_dict[self.dropout_placeholder] = dropout
         if data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
-
         if data_batch['a'] is not None:
             feed_dict[self.answer_placeholder] = data_batch['a']
-
         if data_batch['a_m'] is not None:
             feed_dict[self.answer_mask_placeholder] = data_batch['a_m']
-
         if data_batch['a_s'] is not None:
             feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
-
 
         return feed_dict
 
@@ -98,60 +77,46 @@ class MatchLstmBoundryModel():
 
         return question_embeddings, document_embeddings
 
-
-
-    ###################################
-    #####  LSTM preprocessing Layer ###
-    ####################################
+    # ===============================
+    # DOCUMENT AND QUESTION ENCODER
     def add_preprocessing_op(self, debug_shape=False):
 
-        q_input,d_input = self.add_embedding()
+        (q_input, d_input) = self.add_embedding()
         dropout_rate = self.dropout_placeholder
 
-        with tf.variable_scope("Q_LSTM"):
+        with tf.variable_scope("BLSTM"):
+            cell_fw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
+            cell_bw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
+            initial_state_fw = cell_fw.zero_state(FLAGS.batch_size, tf.float32)
+            initial_state_bw = cell_bw.zero_state(FLAGS.batch_size, tf.float32)
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+            ((output_fw, output_bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, q_input,
+                                                                          sequence_length=self.question_seq_placeholder,
+                                                                          initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw)
+            Q = tf.concat(3, output_fw, output_bw)
 
-            initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
+            tf.get_variable_scope().reuse_variables()
+            ((output_fw, output_bw), _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, d_input,
+                                                                          sequence_length=self.question_seq_placeholder,
+                                                                          initial_state_fw=initial_state_fw, initial_state_bw=initial_state_bw)
+            D = tf.concat(3, output_fw, output_bw)
 
-            (output, _) = tf.nn.dynamic_rnn(cell=cell,
-                                            inputs=q_input,
-                                            initial_state=initial_state,
-                                            sequence_length=self.question_seq_placeholder
-                                            )
-            H_Q = output
+            Wq = tf.get_variable("Wq", shape=(2 * FLAGS.state_size, 2 * FLAGS.state_size)
+                                 dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            bq = tf.get_variable("bq", shape=(2 * FLAGS.state_size)
+                                 dtype=tf.float32, initializer=tf.constant_initializer(0.))
+            Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, Wq) + bq)
 
-        with tf.variable_scope("P_LSTM"):
+            assertion("Q", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+            assertion("D", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+        return (D, Q)
 
-            initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
-
-            (output, _) = tf.nn.dynamic_rnn(cell=cell,
-                                            inputs=tf.transpose(d_input,perm=[1,0,2]),
-                                            initial_state=initial_state,
-                                            sequence_length=self.question_seq_placeholder,
-                                            time_major=True
-                                            )
-            H_P = output
-
-        preprocessing_rep = (H_Q,H_P)
-
-        if debug_shape:
-            return preprocessing_rep + (
-                tf.shape(d_input,name="debug_PLL_d_input"),
-                tf.shape(q_input,name="debug_PLL_q_input"),
-                tf.shape(H_Q,name="debug_PLL_H_Q"),
-                tf.shape(H_P,name="debug_PLL_H_p")
-            )
-        return preprocessing_rep
-
-    ####################################
-    #####  Match LSTM Layer #########
-    ####################################
+    # =============================
+    # COATTENTION ENCODER
     def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
-        H_Q = preprocessing_rep[0]
-        H_P = tf.unpack(preprocessing_rep[1])
+        D = preprocessing_rep[0]
+        Q = preprocessing_rep[1]
         fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd',debug_shape=debug_shape)
         rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev',debug_shape=debug_shape)
 
