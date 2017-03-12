@@ -196,6 +196,19 @@ def debug_shape():
         model = choose_model(embeddings=embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            print(shape)
+            print(len(shape))
+            variable_parametes = 1
+            for dim in shape:
+                print(dim)
+                variable_parametes *= dim.value
+            print(variable_parametes)
+            total_parameters += variable_parametes
+        print(total_parameters)
 
         with tf.Session() as session:
             session.run(init)
@@ -210,4 +223,4 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug_shape == 1:
         debug_shape()
-    train()
+    # train()
