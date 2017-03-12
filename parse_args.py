@@ -20,14 +20,13 @@ def parse_args():
     tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")
     tf.app.flags.DEFINE_string("embed_path", "", "Path to the trimmed GLoVe embedding (default: ./data/squad/glove.trimmed.{vocab_dim}.npz)")
 
-    tf.app.flags.DEFINE_integer("debug_shape", 0, "Debug shapes of Tensor")
+    tf.app.flags.DEFINE_integer("debug_shape", 1, "Debug shapes of Tensor")
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 0, "Print predicted text after every n epochs")
 
+    tf.app.flags.DEFINE_string("model","match_lstm_boundry", "match_lstm/match_lstm_boundry")
     tf.app.flags.DEFINE_integer("coattention_pooling_size",11, "")
-
-    tf.app.flags.DEFINE_string("match_lstm_loss_type","sequence", "")
 
     tf.app.flags.DEFINE_integer("max_document_size", 120, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("max_question_size", 15, "Size of each model layer.")

@@ -10,11 +10,24 @@ from util import Progbar
 
 FLAGS = tf.app.flags.FLAGS
 
-from match_lstm import MatchLstmModel
+
+from match_lstm_boundry import MatchLstmBoundryModel
 
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
+def choose_model(embeddings, debug_shape=False):
+    if FLAGS.model.lower() == "match_lstm":
+        from match_lstm import MatchLstmModel
+        model = MatchLstmModel(embeddings, debug_shape)
+    elif FLAGS.model.lower() == "match_lstm_boundry":
+        from match_lstm_boundry import MatchLstmBoundryModel
+        model = MatchLstmBoundryModel(embeddings, debug_shape)
+    else:
+        model = None
+
+    return model
 
 
 def train_epoch(train_data, model, session):
@@ -140,7 +153,7 @@ def train():
 
         logger.info("Building model...",)
         start = time.time()
-        model = MatchLstmModel(embeddings)
+        model = choose_model(embeddings=embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
         saver = None
@@ -180,10 +193,22 @@ def debug_shape():
 
         logger.info("Building model for Debugging Shape...")
         start = time.time()
-        # model = CoattentionModel(embeddings, debug_shape=True)
-        model = MatchLstmModel(embeddings, debug_shape=True)
+        model = choose_model(embeddings=embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
+        total_parameters = 0
+        for variable in tf.trainable_variables():
+            # shape is an array of tf.Dimension
+            shape = variable.get_shape()
+            print(shape)
+            print(len(shape))
+            variable_parametes = 1
+            for dim in shape:
+                print(dim)
+                variable_parametes *= dim.value
+            print(variable_parametes)
+            total_parameters += variable_parametes
+        print(total_parameters)
 
         with tf.Session() as session:
             session.run(init)
@@ -198,4 +223,4 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug_shape == 1:
         debug_shape()
-    train()
+    # train()

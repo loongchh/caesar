@@ -3,6 +3,7 @@ import logging
 import tensorflow as tf
 
 import util
+import qa_data_util as du
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -12,12 +13,11 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
-class MatchLstmModel():
+class MatchLstmBoundryModel():
 
     def __init__(self, embeddings, debug_shape=False):
         self.pretrained_embeddings = embeddings
         self.build(debug_shape)
-
 
 
     def add_placeholders(self):
@@ -98,79 +98,7 @@ class MatchLstmModel():
 
         return question_embeddings, document_embeddings
 
-    def add_char_embedding(self):
-        """ Rewritten from https://github.com/allenai/bi-att-flow
-        """
-        char_emb_mat = tf.get_variable("char_emb_mat", shape=[FLAGS.char_vocab_size, FLAGS.char_emb_size], dtype='float')
 
-        question_embeddings = tf.nn.embedding_lookup(params=char_emb_mat, ids=self.question_placeholder)
-        document_embeddings = tf.nn.embedding_lookup(params=char_emb_mat, ids=self.document_placeholder)
-
-        filter_sizes = list(map(int, FLAGS.out_channel_dims.split(',')))
-        heights = list(map(int, FLAGS.filter_heights.split(',')))
-        assert sum(filter_sizes) == dco, (filter_sizes, FLAGS.char_out_size)
-
-        with tf.variable_scope("conv"):
-            X_d = multi_conv1d(document_embeddings, filter_sizes, heights, "VALID", self.is_train, FLAGS.cnn_keep_prob, scope="X_d")
-            tf.get_variable_scope().reuse_variables()
-            X_q = multi_conv1d(question_embeddings, filter_sizes, heights, "VALID", self.is_train, FLAGS.cnn_keep_prob, scope="X_q")
-
-            X_d = tf.reshape(X_d, [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.char_out_size])
-            X_q = tf.reshape(X_q, [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.char_out_size])
-
-        return (X_q, X_d)
-
-    def highway_layer(arg, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
-        """ From https://github.com/allenai/bi-att-flow
-        """
-        with tf.variable_scope(scope or "highway_layer"):
-        d = arg.get_shape()[-1]
-        trans = linear([arg], d, bias, bias_start=bias_start, scope='trans', wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
-        trans = tf.nn.relu(trans)
-        gate = linear([arg], d, bias, bias_start=bias_start, scope='gate', wd=wd, input_keep_prob=input_keep_prob, is_train=is_train)
-        gate = tf.nn.sigmoid(gate)
-        out = gate * trans + (1 - gate) * arg
-        return out
-
-    def highway_network(arg, num_layers, bias, bias_start=0.0, scope=None, wd=0.0, input_keep_prob=1.0, is_train=None):
-        """ From https://github.com/allenai/bi-att-flow
-        """
-        with tf.variable_scope(scope or "highway_network"):
-            prev = arg
-            cur = None
-            for layer_idx in range(num_layers):
-                cur = highway_layer(prev, bias, bias_start=bias_start, scope="layer_{}".format(layer_idx), wd=wd,
-                                    input_keep_prob=input_keep_prob, is_train=is_train)
-                prev = cur
-            return cur
-
-    def conv1d(in_, filter_size, height, padding, is_train=None, keep_prob=1.0, scope=None):
-        """ From https://github.com/allenai/bi-att-flow
-        """
-        with tf.variable_scope(scope or "conv1d"):
-        num_channels = in_.get_shape()[-1]
-        filter_ = tf.get_variable("filter", shape=[1, height, num_channels, filter_size], dtype='float')
-        bias = tf.get_variable("bias", shape=[filter_size], dtype='float')
-        strides = [1, 1, 1, 1]
-        if is_train is not None and keep_prob < 1.0:
-            in_ = dropout(in_, keep_prob, is_train)
-        xxc = tf.nn.conv2d(in_, filter_, strides, padding) + bias  # [N*M, JX, W/filter_stride, d]
-        out = tf.reduce_max(tf.nn.relu(xxc), 2)  # [-1, JX, d]
-        return out
-
-    def multi_conv1d(in_, filter_sizes, heights, padding, is_train=None, keep_prob=1.0, scope=None):
-        """ From https://github.com/allenai/bi-att-flow
-        """
-        with tf.variable_scope(scope or "multi_conv1d"):
-            assert len(filter_sizes) == len(heights)
-            outs = []
-            for filter_size, height in zip(filter_sizes, heights):
-                if filter_size == 0:
-                    continue
-                out = conv1d(in_, filter_size, height, padding, is_train=is_train, keep_prob=keep_prob, scope="conv1d_{}".format(height))
-                outs.append(out)
-            concat_out = tf.concat(2, outs)
-            return concat_out
 
     ###################################
     #####  LSTM preprocessing Layer ###
@@ -207,34 +135,6 @@ class MatchLstmModel():
                                             )
             H_P = output
 
-        if FLAGS.use_char_emb:
-            char_q_input, char_d_input = self.add_char_embedding()
-            dropout_rate = self.dropout_placeholder
-
-            with tf.variable_scope("C_Q_LSTM"):
-                cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-                initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
-                (output, _) = tf.nn.dynamic_rnn(cell=cell,
-                                                inputs=char_q_input,
-                                                initial_state=initial_state,
-                                                sequence_length=self.question_seq_placeholder
-                                                )
-                C_H_Q = output
-
-            with tf.variable_scope("C_P_LSTM"):
-                cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-                initial_state = cell.zero_state(FLAGS.batch_size, tf.float32)
-                (output, _) = tf.nn.dynamic_rnn(cell=cell,
-                                                inputs=tf.transpose(char_d_input,perm=[1,0,2]),
-                                                initial_state=initial_state,
-                                                sequence_length=self.question_seq_placeholder,
-                                                time_major=True
-                                                )
-                C_H_P = output
-                
-            H_Q = tf.concat(2, [H_Q, C_H_Q])
-            H_P = tf.concat(2, [H_P, C_H_P])
-
         preprocessing_rep = (H_Q,H_P)
 
         if debug_shape:
@@ -252,8 +152,20 @@ class MatchLstmModel():
     def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
         H_Q = preprocessing_rep[0]
         H_P = tf.unpack(preprocessing_rep[1])
+        fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd',debug_shape=debug_shape)
+        rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev',debug_shape=debug_shape)
 
-        with tf.variable_scope("Match_LSTM"):
+        Hr = tf.concat(2, [fwd[0], rev[0]])
+        match_lstm_rep = (Hr,)
+        if debug_shape:
+            return match_lstm_rep + (tf.shape(Hr,name="debug_MLL_Hr"),) + fwd + rev + preprocessing_rep
+        return match_lstm_rep + preprocessing_rep
+
+    #  Match LSTM Forward/Bacward Layer #########
+    def match_lstm_direction_op(self, H_P, H_Q, direction, debug_shape=False):
+        if direction == "rev":
+            tf.reverse(H_P, [True, False, False])
+        with tf.variable_scope("Match_LSTM_{}".format(direction)):
             W_q =tf.get_variable(name='W_q',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
@@ -324,32 +236,31 @@ class MatchLstmModel():
         match_lstm_rep = (Hr,)
         if debug_shape:
             return match_lstm_rep + (
-                tf.shape(H_P,name="debug_MLL_HP"),
-                tf.shape(H_Q,name="debug_MLL_HQ"),
-                tf.shape(H_P[0],name="debug_MLL_HP0"),
-                tf.shape(Wq_HQ,name="debug_MLL_Wq_HQ"),
-                tf.shape(Wp_HPi,name="debug_MLL_Wp_HPi"),
-                tf.shape(Wr_Hr,name="debug_MLL_Wr_Hr"),
-                tf.shape(Gi,name="debug_MLL_Gi"),
-                tf.shape(wt_Gi,name="debug_MLL_wt_Gi"),
-                tf.shape(alphai,name="debug_MLL_alphai"),
-                tf.shape(HQ_alphai,name="debug_MLL_HQ_alphai"),
-                tf.shape(zi,name="debug_MLL_zi"),
-                tf.shape(Hr,name="debug_MLL_Hr"),
-            ) + preprocessing_rep
+                tf.shape(H_P,name="debug_MLL_{}_HP".format(direction)),
+                tf.shape(H_Q,name="debug_MLL_{}_HQ".format(direction)),
+                tf.shape(H_P[0],name="debug_MLL_{}_HP0".format(direction)),
+                tf.shape(Wq_HQ,name="debug_MLL_{}_Wq_HQ".format(direction)),
+                tf.shape(Wp_HPi,name="debug_MLL_{}_Wp_HPi".format(direction)),
+                tf.shape(Wr_Hr,name="debug_MLL_{}_Wr_Hr".format(direction)),
+                tf.shape(Gi,name="debug_MLL_{}_Gi".format(direction)),
+                tf.shape(wt_Gi,name="debug_MLL_{}_wt_Gi".format(direction)),
+                tf.shape(alphai,name="debug_MLL_{}_alphai".format(direction)),
+                tf.shape(HQ_alphai,name="debug_MLL_{}_HQ_alphai".format(direction)),
+                tf.shape(zi,name="debug_MLL_{}_zi".format(direction)),
+                tf.shape(Hr,name="debug_MLL_{}_Hr".format(direction)),
+            )
 
-        return match_lstm_rep + preprocessing_rep
+        return match_lstm_rep
 
     ####################################
     ##### Answer Pointer Layer #########
     ####################################
     def add_answer_pointer_op(self, match_lstm_rep, debug_shape=False):
         Hr = match_lstm_rep[0]
-        Hr = tf.concat(1, [tf.zeros(shape=[FLAGS.batch_size,1,FLAGS.state_size]), Hr] )
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
+                                 shape = [2*FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
                                  initializer=tf.contrib.layers.xavier_initializer()
                                  )
@@ -382,27 +293,27 @@ class MatchLstmModel():
 
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
             betas = []
-            for k in range(FLAGS.max_answer_size):
+            for k in range(2):
                 if k > 0:
                     tf.get_variable_scope().reuse_variables()
                 V_Hr = tf.einsum('ijk,kl->ijl', Hr, V)
                 Wa_Ha = tf.matmul(ha[1], W_a)
                 Fk = Wa_Ha + b_a
                 Fk = tf.reshape(
-                    tensor=tf.tile(Fk, [1,FLAGS.max_document_size+1]),
-                    shape=[FLAGS.batch_size, FLAGS.max_document_size+1, FLAGS.state_size]
+                    tensor=tf.tile(Fk, [1,FLAGS.max_document_size]),
+                    shape=[FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size]
                 )
                 Fk = tf.nn.tanh(Fk + V_Hr)
 
-                vt_Fk = tf.reshape(tf.einsum('ijk,kl->ijl', Fk, v),[FLAGS.batch_size, FLAGS.max_document_size+1])
+                vt_Fk = tf.reshape(tf.einsum('ijk,kl->ijl', Fk, v),[FLAGS.batch_size, FLAGS.max_document_size])
 
-                betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size+1]))
-                betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size+1])
-            #
+                betak = tf.nn.softmax(vt_Fk + tf.tile(c, [FLAGS.max_document_size]))
+                betak_ = tf.reshape(betak,[FLAGS.batch_size, 1,FLAGS.max_document_size])
+
                 Hr_betak = tf.einsum('ijk,ikl->ijl', betak_, Hr)
-                Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, FLAGS.state_size])
+                Hr_betak = tf.reshape(Hr_betak, [FLAGS.batch_size, 2*FLAGS.state_size])
 
-            #
+
                 betas.append(betak)
                 _, ha = cell(Hr_betak, ha)
 
@@ -412,7 +323,7 @@ class MatchLstmModel():
 
         answer_pointer_rep = (betas, pred)
         if debug_shape:
-            return answer_pointer_rep + (
+            return answer_pointer_rep+(
                 tf.shape(V_Hr,name="debug_APL_V_Hr"),
                 tf.shape(Fk,name="debug_APL_Fk"),
                 tf.shape(vt_Fk,name="debug_APL_vt_fk"),
@@ -422,16 +333,14 @@ class MatchLstmModel():
                 tf.shape(pred,name="debug_APL_pred"),
             ) + match_lstm_rep
 
-        return answer_pointer_rep + match_lstm_rep
-
+        return  answer_pointer_rep + match_lstm_rep
 
     def add_loss_op(self, answer_pointer_rep, debug_shape=False):
         betas = answer_pointer_rep[0]
-
-        masked_logits = tf.boolean_mask(betas, self.answer_mask_placeholder)
-        masked_labels = tf.boolean_mask(self.answer_placeholder, self.answer_mask_placeholder)
-        L = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(masked_logits,masked_labels))
-        return (L,) + answer_pointer_rep
+        y = self.span_placeholder
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,1,:], y[:,1]))
+        return ((L1+L2)/2.0,) + answer_pointer_rep
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
@@ -453,6 +362,10 @@ class MatchLstmModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
+        logger.info("loss: {}".format(train_op_output[1]))
+        # logger.info("betas: {}".format(train_op_output[2]))
+        logger.info("pred: {}".format(train_op_output[3]))
+
         for i, tensor in enumerate(self.train_op):
             if tensor.name.startswith("debug_"):
                 logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
@@ -463,7 +376,7 @@ class MatchLstmModel():
             fetches = util.tuple_to_list(*self.answer_pointer_rep),
             feed_dict=feed
         )
-        pred = answer_pointer_rep[1]
+        pred = du.get_answer_from_span(answer_pointer_rep[1])
         return pred
 
     def train_on_batch(self, sess, data_batch):
@@ -475,6 +388,6 @@ class MatchLstmModel():
         )
 
         loss = train_op[1]
-        pred = train_op[2]
+        pred = du.get_answer_from_span(train_op[3])
 
         return loss, pred
