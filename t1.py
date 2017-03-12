@@ -169,7 +169,7 @@ def train():
             # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
             # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
-            # session.run(init)
+            session.run(init)
 
             losses, grad_norms = [], []
             for epoch in range(FLAGS.epochs):
