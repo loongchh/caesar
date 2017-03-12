@@ -43,7 +43,7 @@ def train_epoch(train_data, model, session):
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
         grad_norms.append(grad_norm)
-        prog.update(i+1, [("train loss", loss)])
+        prog.update(i+1, [("grad_norm", grad_norm), ("train loss", loss)])
     print ""
     return grad_norms, losses
 

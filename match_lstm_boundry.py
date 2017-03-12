@@ -392,8 +392,8 @@ class MatchLstmBoundryModel():
             feed_dict=feed
         )
 
-        grad_norm = train_op[2]
-        loss = train_op[3]
+        grad_norm = train_op[1]
+        loss = train_op[2]
         pred = du.get_answer_from_span(train_op[4])
 
         return grad_norm, loss, pred
