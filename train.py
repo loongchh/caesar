@@ -10,9 +10,6 @@ from util import Progbar
 
 FLAGS = tf.app.flags.FLAGS
 
-
-from match_lstm_boundry import MatchLstmBoundryModel
-
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
@@ -24,6 +21,9 @@ def choose_model(embeddings, debug_shape=False):
     elif FLAGS.model.lower() == "match_lstm_boundry":
         from match_lstm_boundry import MatchLstmBoundryModel
         model = MatchLstmBoundryModel(embeddings, debug_shape)
+    elif FLAGS.model.lower() == "coattention":
+        from coattention import CoattentionModel
+        model = CoattentionModel(embeddings, debug_shape)
     else:
         model = None
 

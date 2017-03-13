@@ -13,9 +13,9 @@ logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
-def assertion(var_name, expected):
-    shape = eval(var_name).get_shape().as_list()
-    assert shape == expected \
+def assertion(var, var_name, expected):
+    shape = var.get_shape().as_list()
+    assert shape == expected, \
         "{} of incorrect shape. Expected {}, got {}".format(var_name, expected, shape)
 
 class CoattentionModel():
@@ -75,8 +75,8 @@ class CoattentionModel():
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
-        assertion("question_embeddings", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
-        assertion("document_embeddings", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.state_size])
+        # assertion(question_embeddings, "question_embeddings", [FLAGS.batch_size, FLAGS.max_question_size + 1, None])
+        # assertion(document_embeddings, "document_embeddings", [FLAGS.batch_size, FLAGS.max_document_size + 1, None])
 
         return question_embeddings, document_embeddings
 
@@ -88,12 +88,12 @@ class CoattentionModel():
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
             cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
-            (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed)
+            (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed, dtype=tf.float32)
             tf.get_variable_scope().reuse_variables()
-            (D, _) = tf.nn.dynamic_rnn(cell, D_embed)
+            (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
         
-        assertion("Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
-        assertion("D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
+        assertion(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
+        assertion(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
 
         # Add sentinel to the end of document/question.
         Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
@@ -101,14 +101,14 @@ class CoattentionModel():
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
-            Wq = tf.get_variable("Wq", shape=(FLAGS.state_size, FLAGS.state_size)
-                                 dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
-            bq = tf.get_variable("bq", shape=(FLAGS.state_size)
-                                 dtype=tf.float32, initializer=tf.constant_initializer(0.))
-            Q = tf.tanh(tf.matmul(Q, Wq) + bq)
+            W_q = tf.get_variable("W_q", shape=(FLAGS.state_size, FLAGS.state_size),
+                                  dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            b_q = tf.get_variable("b_q", shape=(FLAGS.state_size),
+                                  dtype=tf.float32, initializer=tf.constant_initializer(0.))
+            Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
 
-        assertion("Q", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
-        assertion("D", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.state_size])
+        assertion(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
+        assertion(D, "D", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.state_size])
         return (Q, D)
 
     ## ==============================
@@ -118,41 +118,43 @@ class CoattentionModel():
         D = preprocessing[1]
 
         # Affinity matrix.
-        L = tf.matmul(Q, tf.transpose(D))
-        assertion("L", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
+        L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
+        assertion(L, "L", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
 
         # Normalize with respect to question/document.
         Aq = tf.nn.softmax(L, dim=2)
-        assertion("Aq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
-        Ad = tf.transpost(tf.nn.softmax(L, dim=1))
-        assertion("Ad", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
+        assertion(Aq, "Aq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
+        Ad = tf.transpose(tf.nn.softmax(L, dim=1), [0, 2, 1])
+        assertion(Ad, "Ad", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
 
         # Attention of the document w.r.t question.
         Cq = tf.matmul(Aq, D)
-        assertion("Cq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
+        assertion(Cq, "Cq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
         Cd = tf.concat_v2([tf.matmul(Ad, Q), tf.matmul(Ad, Cq)], 2)
-        assertion("Cd", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
+        assertion(Cd, "Cd", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
 
         # Fusion of temporal information to the coattention context
-        coatt = tf.concat_v2([D, Cd], 2)
-        assertion("coatt", [FLAGS.batch_size, FLAGS.max_document_size + 1, 3 * FLAGS.state_size])
         with tf.variable_scope("COATTENTION"):
+            coatt = tf.concat_v2([D, Cd], 2)
+            assertion(coatt, "coatt", [FLAGS.batch_size, FLAGS.max_document_size + 1, 3 * FLAGS.state_size])
+            
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
-            (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32)
+            (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32, \
+                sequence_length=tf.to_int64([FLAGS.max_document_size + 1] * FLAGS.batch_size))
             U = tf.concat_v2(U, 2)
         
-        assertion("U", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
+        assertion(U, "U", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
 
 
     ## ==============================
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
         U = tf.transpose(coattention, [1, 0, 2])
-        assertion("U", [FLAGS.max_document_size + 1, FLAGS.batch_size, 2 * FLAGS.state_size])
+        assertion(U, "U", [FLAGS.max_document_size + 1, FLAGS.batch_size, 2 * FLAGS.state_size])
 
         LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
         HMN_a = highway_maxout(FLAGS.state_size, maxout_size)
@@ -161,8 +163,8 @@ class CoattentionModel():
         # Get first estimated locations
         u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
         u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
-        assertion("u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
-        assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+        assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+        assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope('DECODER'):
             alpha = []
@@ -174,7 +176,7 @@ class CoattentionModel():
                 
                 # The dynamic decoder is a state machine
                 (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
-                assertion("h", [FLAGS.state_size])
+                assertion(h, "h", [FLAGS.state_size])
 
                 with tf.variable_scope('HIGHWAY-A'):
                     # Start score corresponding to each word in document
@@ -182,9 +184,9 @@ class CoattentionModel():
 
                     # Update current start position
                     s = tf.reshape(tf.argmax(a, 0), [batch_size])
-                    assertion("s", [batch_size])
+                    assertion(s, "s", [batch_size])
                     u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-                    assertion("u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+                    assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 with tf.variable_scope('HIGHWAY-B'):
                     # Start score corresponding to each word in document
@@ -192,9 +194,9 @@ class CoattentionModel():
 
                     # Update current start position
                     e = tf.reshape(tf.argmax(b, 0), [batch_size])
-                    assertion("e", [batch_size])
+                    assertion(e, "e", [batch_size])
                     u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-                    assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+                    assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 alpha.append(a)
                 beta.append(b)
