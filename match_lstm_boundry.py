@@ -349,28 +349,10 @@ class MatchLstmBoundryModel():
         (grad, var) = zip(*gradients)
 
         (grad, _) = tf.clip_by_global_norm(grad, 15.0)
-        # grads_to_look=OrderedDict()
-        # grads_to_look["Q_LSTM/RNN/LSTMCell"] = []
-        # grads_to_look["P_LSTM/RNN/LSTMCell"] = []
-        # grads_to_look["Match_LSTM_fwd/LSTMCell"] = []
-        # grads_to_look["Match_LSTM_rev/LSTMCell"] = []
-        # grads_to_look["ANSWER_POINTER/LSTMCell"] = []
-        # grads_to_look["REST"] = []
 
-        # for i,v in enumerate(var):
-        #     rest=True
-        #     for key in grads_to_look:
-        #         if v.name.startswith(key):
-        #             grads_to_look[key].append(grad[i])
-        #             rest=False
-        #     if rest:
-        #         grads_to_look["REST"].append(grad[i])
-        #
-        # grad_norm=[]
-        # for key in grads_to_look:
-        #     grad_norm.append(tf.global_norm(grads_to_look[key]))
         grad_norm = []
         for i,v in enumerate(var):
+            logger.info("----------all trainable variables picked for grad norm------------------")
             logger.info(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
         grad_norm = tf.pack(grad_norm)

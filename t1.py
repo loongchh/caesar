@@ -11,6 +11,7 @@ from util import Progbar
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from matplotlib.backends.backend_pdf import PdfPages
 from collections import OrderedDict
 
 
@@ -46,9 +47,9 @@ def train_epoch(train_data, model, session, losses, grad_norms):
         data_batch = du.get_batch(train_data, i)
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
-        for i,k in enumerate(grad_norms):
-            grad_norms[k].append(grad_norm[i])
-        prog.update(i+1, [("grad_norm", np.sum(grad_norm)), ("train loss", loss)])
+        for j,grad in enumerate(grad_norm):
+            grad_norms[j].append(grad)
+        prog.update(i+1, [("grad_norm",np.sum(grad_norm)),("train loss", loss)])
     print ""
     return grad_norms, losses
 
@@ -170,32 +171,30 @@ def train():
         saver = None
 
         with tf.Session() as session:
+            # TODO: Play more with TFDG Debugger
             # session = tf_debug.LocalCLIDebugWrapperSession(session)
             # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
 
+            # TODO: tensorboard summary writer
             # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
             losses = []
-            grad_norms=OrderedDict()
-            grad_norms["Q_LSTM-RNN-LSTMCell"] = []
-            grad_norms["P_LSTM-RNN-LSTMCell"] = []
-            grad_norms["Match_LSTM_fwd-LSTMCell"] = []
-            grad_norms["Match_LSTM_rev-LSTMCell"] = []
-            grad_norms["ANSWER_POINTER-LSTMCell"] = []
-            grad_norms["REST"] = []
+            grad_norms = [[] for i,j in enumerate(tf.trainable_variables())] # grad_norm array for all the variables
             for epoch in range(FLAGS.epochs):
 
+                # TODO: tensorboard summary writer
                 # run_metadata = tf.RunMetadata()
                 # train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
 
                 logger.info("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
-                ### Training
+                # Training
                 grad_norms, losses = train_epoch(train_data, model, session,losses, grad_norms)
-                ### Evaluation
+                # Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
 
-                ### Checkpoint model
+                # TODO: Checkpoint model
+
             make_prediction_plot(losses, grad_norms)
 
             # train_writer.close()
@@ -205,21 +204,25 @@ def train():
 
 
 def make_prediction_plot(losses, grad_norms):
-    losses = np.array(losses)
-    for i,key in enumerate(grad_norms):
-	plt.clf()
-        plt.subplot(2, 1, 1)
+    with PdfPages("../plots/{}.pdf".format(FLAGS.model)) as pdf:
+        plt.clf()
+        # -----------------------
+        losses = np.array(losses)
+        plt.figure()
         plt.title("Loss")
         plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
         plt.ylabel("Loss")
+        pdf.savefig()
+        plt.close()
 
-        norm = np.array(grad_norms[key])
-        plt.subplot(2, 1, 2)
-        plt.plot(np.arange(norm.size), norm.flatten(), label="Gradients")
-        plt.ylabel("Gradients-{}".format(key))
-        plt.xlabel("Minibatch")
-        output_path = "../plots/train-{}.png".format(key)
-        plt.savefig(output_path)
+        for i,v in enumerate(tf.trainable_variables()):
+            norm = np.array(grad_norms[i])
+            plt.figure()
+            plt.title(v.name)
+            plt.plot(np.arange(norm.size), norm.flatten(), label="v.name")
+            plt.ylabel("v.name")
+            pdf.savefig()
+            plt.close()
 
 
 def log_total_parametes():
