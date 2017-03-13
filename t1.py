@@ -271,4 +271,4 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug_shape == 1:
         debug_shape()
-    # train()
+    train()
