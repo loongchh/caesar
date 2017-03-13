@@ -226,6 +226,7 @@ def log_total_parametes():
 
     total_parameters = 0
     for variable in tf.trainable_variables():
+        logger.info(variable.name)
         # shape is an array of tf.Dimension
         shape = variable.get_shape()
         # print(shape)
@@ -267,4 +268,4 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug_shape == 1:
         debug_shape()
-    train()
+    # train()
