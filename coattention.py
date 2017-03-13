@@ -70,8 +70,7 @@ class CoattentionModel():
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.cast(tf.get_variable("embeddings", initializer=self.pretrained_embeddings, 
-                                                 dtype=tf.float64, trainable=False), tf.float32)
+        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=False)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
@@ -251,9 +250,22 @@ class CoattentionModel():
 
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
-        (grad, var) = zip(*optimizer.compute_gradients(loss))
-        (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
-        return optimizer.apply_gradients(zip(grad, var))
+
+        gradients = optimizer.compute_gradients(loss)
+        (grad, var) = zip(*gradients)
+
+        (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+
+        grad_norm = []
+        logger.info("----------all trainable variables picked for grad norm------------------")
+        for i,v in enumerate(var):
+
+            logger.info(v.name)
+            grad_norm.append(tf.global_norm([grad[i]]))
+        grad_norm = tf.pack(grad_norm)
+        train_op = optimizer.apply_gradients(zip(grad, var))
+
+        return (train_op, grad_norm) + loss
 
     def build(self, debug_shape):
         self.add_placeholders()
@@ -271,12 +283,12 @@ class CoattentionModel():
             feed_dict=feed
         )
         logger.info("grads: {}".format(train_op_output[1]))
-        logger.info("loss: {}".format(train_op_output[2]))
-        logger.info("pred: {}".format(train_op_output[4]))
+        # logger.info("loss: {}".format(train_op_output[2]))
+        # logger.info("pred: {}".format(train_op_output[4]))
 
-        for i, tensor in enumerate(self.train_op):
-            if tensor.name.startswith("debug_"):
-                logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
+        # for i, tensor in enumerate(self.train_op):
+        #     if tensor.name.startswith("debug_"):
+        #         logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
@@ -297,6 +309,6 @@ class CoattentionModel():
 
         grad_norm = train_op[1]
         loss = train_op[2]
-        pred = du.get_answer_from_span(train_op[4])
+        # pred = du.get_answer_from_span(train_op[4])
 
-        return grad_norm, loss, pred
+        return grad_norm, loss

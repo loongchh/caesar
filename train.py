@@ -45,7 +45,7 @@ def train_epoch(train_data, model, session, losses, grad_norms):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i, permutation=permutation)
-        grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
+        grad_norm, loss = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
         for j,grad in enumerate(grad_norm):
             grad_norms[j].append(grad)
