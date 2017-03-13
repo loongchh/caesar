@@ -7,7 +7,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("batch_size", 40, "Batch size to use during training.")
 
     tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-    tf.app.flags.DEFINE_integer("state_size", 150, "Size of each model layer.")
+    tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")
     tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
     tf.app.flags.DEFINE_string("data_dir", "data/squad", "SQuAD directory (default ./data/squad)")
@@ -31,4 +31,8 @@ def parse_args():
     tf.app.flags.DEFINE_integer("max_document_size", 120, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("max_question_size", 15, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("max_answer_size", 6, "Size of each model layer.")
+
+    tf.app.flags.DEFINE_integer("maxout_size", 32, "Size of maxout in Highway Maxout Network.")
+    tf.app.flags.DEFINE_integer("max_decode_steps", 4, "Size of decoding steps.")
+
 

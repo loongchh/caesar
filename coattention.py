@@ -144,10 +144,11 @@ class CoattentionModel():
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32, \
-                sequence_length=tf.to_int64([FLAGS.max_document_size + 1] * FLAGS.batch_size))
+                sequence_length=self.document_seq_placeholder)
             U = tf.concat_v2(U, 2)
         
         assertion(U, "U", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
+        return U
 
 
     ## ==============================
@@ -157,8 +158,9 @@ class CoattentionModel():
         assertion(U, "U", [FLAGS.max_document_size + 1, FLAGS.batch_size, 2 * FLAGS.state_size])
 
         LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
-        HMN_a = highway_maxout(FLAGS.state_size, maxout_size)
-        HMN_b = highway_maxout(FLAGS.state_size, maxout_size)
+        h = LSTM_dec.zero_state(FLAGS.state_size, dtype=tf.float32)
+        HMN_a = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
+        HMN_b = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
 
         # Get first estimated locations
         u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
@@ -175,31 +177,38 @@ class CoattentionModel():
                     tf.get_variable_scope().reuse_variables()
                 
                 # The dynamic decoder is a state machine
-                (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
-                assertion(h, "h", [FLAGS.state_size])
+                (_, state) = tf.nn.rnn(LSTM_dec, [tf.concat_v2([u_s, u_e], 1)], dtype=tf.float32)
+                h = tf.concat(1, state)
+                # (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
+                # assertion(h, "h", [FLAGS.state_size])
+                batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
+                def select(pos, idx):
+                    return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
 
                 with tf.variable_scope('HIGHWAY-A'):
                     # Start score corresponding to each word in document
                     a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
 
                     # Update current start position
-                    s = tf.reshape(tf.argmax(a, 0), [batch_size])
-                    assertion(s, "s", [batch_size])
-                    u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+                    s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
+                    assertion(s, "s", [FLAGS.batch_size])
+                    # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+                    u_s = tf.map_fn(lambda i: select(s, i), batch_index, dtype=tf.float32)
                     assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 with tf.variable_scope('HIGHWAY-B'):
-                    # Start score corresponding to each word in document
+                    # End score corresponding to each word in document
                     b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
 
-                    # Update current start position
-                    e = tf.reshape(tf.argmax(b, 0), [batch_size])
-                    assertion(e, "e", [batch_size])
-                    u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+                    # Update current end position
+                    e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
+                    assertion(e, "e", [FLAGS.batch_size])
+                    # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+                    u_e = tf.map_fn(lambda i: select(e, i), batch_index, dtype=tf.float32)
                     assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
-                alpha.append(a)
-                beta.append(b)
+                alpha.append(tf.reshape(a, [FLAGS.batch_size, -1]))
+                beta.append(tf.reshape(b, [FLAGS.batch_size, -1]))
 
         return (alpha, beta)
 
@@ -216,7 +225,6 @@ class CoattentionModel():
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
-
         return (train_op,) + loss
 
     def build(self, debug_shape):
