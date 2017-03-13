@@ -208,14 +208,16 @@ def train():
 
 
 def make_prediction_plot(losses, grad_norms):
+    losses = np.array(losses)
     plt.subplot(7, 1, 1)
     plt.title("Loss")
     plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
     plt.ylabel("Loss")
 
     for i,key in enumerate(grad_norms):
+        norm = np.array(grad_norms[key])
         plt.subplot(7, 1, 2+i)
-        plt.plot(np.arange(grad_norms[key].size), grad_norms[key].flatten(), label="Gradients")
+        plt.plot(np.arange(norm.size), norm.flatten(), label="Gradients")
         plt.ylabel("Gradients-{}".format(key))
         plt.xlabel("Minibatch")
 
