@@ -35,17 +35,22 @@ def choose_model(embeddings, debug_shape=False):
     return model
 
 
-def train_epoch(train_data, model, session):
+def train_epoch(train_data, model, session, losses, grad_norms):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
     prog = Progbar(target=num_train_batches)
-    losses, grad_norms = [], []
+
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
         data_batch = du.get_batch(train_data, i)
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
-        grad_norms.append(grad_norm)
+        grad_norms["Q_LSTM/RNN/LSTMCell"].append(grad_norm[0])
+        grad_norms["P_LSTM/RNN/LSTMCell"].append(grad_norm[1])
+        grad_norms["Match_LSTM_fwd/LSTMCell"].append(grad_norm[2])
+        grad_norms["Match_LSTM_rev/LSTMCell"].append(grad_norm[3])
+        grad_norms["ANSWER_POINTER/LSTMCell"].append(grad_norm[4])
+        grad_norms["REST"].append(grad_norm[5])
         prog.update(i+1, [("grad_norm", grad_norm), ("train loss", loss)])
     print ""
     return grad_norms, losses
@@ -174,7 +179,14 @@ def train():
             # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
-            losses, grad_norms = [], []
+            losses = []
+            grad_norms = {"Q_LSTM/RNN/LSTMCell":[],
+                             "P_LSTM/RNN/LSTMCell":[],
+                             "Match_LSTM_fwd/LSTMCell":[],
+                             "Match_LSTM_rev/LSTMCell":[],
+                             "ANSWER_POINTER/LSTMCell":[],
+                             "REST":[]
+                             }
             for epoch in range(FLAGS.epochs):
 
                 # run_metadata = tf.RunMetadata()
@@ -182,14 +194,11 @@ def train():
 
                 logger.info("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
                 ### Training
-                grad_norm, loss = train_epoch(train_data, model, session)
-                losses.append(loss)
-                grad_norms.append(grad_norm)
+                grad_norms, losses = train_epoch(train_data, model, session,losses, grad_norms)
                 ### Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
 
                 ### Checkpoint model
-            losses, grad_norms = np.array(losses), np.array(grad_norms)
             make_prediction_plot(losses, grad_norms)
 
             # train_writer.close()
@@ -199,15 +208,17 @@ def train():
 
 
 def make_prediction_plot(losses, grad_norms):
-    plt.subplot(2, 1, 1)
+    plt.subplot(7, 1, 1)
     plt.title("Loss")
     plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
     plt.ylabel("Loss")
 
-    plt.subplot(2, 1, 2)
-    plt.plot(np.arange(grad_norms.size), grad_norms.flatten(), label="Gradients")
-    plt.ylabel("Gradients")
-    plt.xlabel("Minibatch")
+    for i,key in enumerate(grad_norms):
+        plt.subplot(7, 1, 2+i)
+        plt.plot(np.arange(grad_norms[key].size), grad_norms[key].flatten(), label="Gradients")
+        plt.ylabel("Gradients-{}".format(key))
+        plt.xlabel("Minibatch")
+
     output_path = "../plots/train.png"
     plt.savefig(output_path)
 

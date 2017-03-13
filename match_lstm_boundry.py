@@ -4,6 +4,7 @@ import tensorflow as tf
 
 import util
 import qa_data_util as du
+from collections import OrderedDict
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -347,8 +348,27 @@ class MatchLstmBoundryModel():
         (grad, var) = zip(*gradients)
 
         (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+        grads_to_look=OrderedDict()
+        grads_to_look["Q_LSTM/RNN/LSTMCell"] = []
+        grads_to_look["P_LSTM/RNN/LSTMCell"] = []
+        grads_to_look["Match_LSTM_fwd/LSTMCell"] = []
+        grads_to_look["Match_LSTM_rev/LSTMCell"] = []
+        grads_to_look["ANSWER_POINTER/LSTMCell"] = []
+        grads_to_look["REST"] = []
 
-        grad_norm = tf.global_norm(grad)
+        for i,v in enumerate(var):
+            rest=True
+            for key in grads_to_look:
+                if v.name.startswith(key):
+                    grads_to_look[key].append(grad[i])
+                    rest=False
+            if rest:
+                grads_to_look["REST"].append(grad[i])
+
+        grad_norm=[]
+        for key in grads_to_look:
+            grad_norm.append(tf.global_norm(grads_to_look[key]))
+        grad_norm = tf.pack(grad_norm)
         train_op = optimizer.apply_gradients(zip(grad, var))
 
         return (train_op,grad_norm) + loss + (tf.shape(grad_norm, name="debug_norm_shape"),)
@@ -368,6 +388,7 @@ class MatchLstmBoundryModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
+        logger.info("grads: {}".format(train_op_output[1]))
         logger.info("loss: {}".format(train_op_output[2]))
         logger.info("pred: {}".format(train_op_output[4]))
 
