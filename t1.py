@@ -203,7 +203,7 @@ def train():
     logger.info("Passed!")
 
 
-def make_prediction_plot(losses, grad_norms):
+def make_training_plots(losses, grad_norms):
     with PdfPages("../plots/{}.pdf".format(FLAGS.model)) as pdf:
         plt.clf()
         # -----------------------
