@@ -3,6 +3,7 @@ import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
 
+import matplotlib.pyplot as plt
 import parse_args
 FLAGS = tf.app.flags.FLAGS
 
@@ -132,11 +133,7 @@ def padding(data, max_length, zero_vector=0, include_one_padding_in_length=False
 
     return data, mask,seq
 
-
 def plot_histogram(data,name ):
-    # import only if required
-    import matplotlib.pyplot as plt
-
     data_lengths = [len(x) for x in data]
     logger.debug("max length for {} = {}".format(name,max(data_lengths)))
     plt.clf()

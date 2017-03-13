@@ -209,20 +209,21 @@ def train():
 
 def make_prediction_plot(losses, grad_norms):
     losses = np.array(losses)
-    plt.subplot(7, 1, 1)
-    plt.title("Loss")
-    plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
-    plt.ylabel("Loss")
+
 
     for i,key in enumerate(grad_norms):
+        plt.subplot(2, 1, 1)
+        plt.title("Loss")
+        plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
+        plt.ylabel("Loss")
+
         norm = np.array(grad_norms[key])
-        plt.subplot(7, 1, 2+i)
+        plt.subplot(2, 1, 2)
         plt.plot(np.arange(norm.size), norm.flatten(), label="Gradients")
         plt.ylabel("Gradients-{}".format(key))
         plt.xlabel("Minibatch")
-
-    output_path = "../plots/train.png"
-    plt.savefig(output_path)
+        output_path = "../plots/train-{}.png".format(key)
+        plt.savefig(output_path)
 
 
 def log_total_parametes():
