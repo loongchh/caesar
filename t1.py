@@ -51,7 +51,7 @@ def train_epoch(train_data, model, session, losses, grad_norms):
         grad_norms["Match_LSTM_rev/LSTMCell"].append(grad_norm[3])
         grad_norms["ANSWER_POINTER/LSTMCell"].append(grad_norm[4])
         grad_norms["REST"].append(grad_norm[5])
-        prog.update(i+1, [("grad_norm", grad_norm), ("train loss", loss)])
+        prog.update(i+1, [("grad_norm", np.average(grad_norm)), ("train loss", loss)])
     print ""
     return grad_norms, losses
 
