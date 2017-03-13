@@ -162,9 +162,17 @@ class CoattentionModel():
         HMN_a = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
         HMN_b = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
 
+        batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
+        def tf_slice(pos, idx):
+            return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
+
         # Get first estimated locations
-        u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
-        u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
+        s = [0] * FLAGS.batch_size
+        e = self.document_seq_placeholder
+        # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+        # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+        u_s = tf.map_fn(lambda i: tf_slice(s, i), batch_index, dtype=tf.float32)
+        u_e = tf.map_fn(lambda i: tf_slice(e, i), batch_index, dtype=tf.float32)
         assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
         assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
@@ -181,19 +189,16 @@ class CoattentionModel():
                 h = tf.concat(1, state)
                 # (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
                 # assertion(h, "h", [FLAGS.state_size])
-                batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
-                def select(pos, idx):
-                    return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
 
                 with tf.variable_scope('HIGHWAY-A'):
                     # Start score corresponding to each word in document
                     a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
 
                     # Update current start position
-                    s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
-                    assertion(s, "s", [FLAGS.batch_size])
+                    new_s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
+                    assertion(new_s, "new_s", [FLAGS.batch_size])
                     # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-                    u_s = tf.map_fn(lambda i: select(s, i), batch_index, dtype=tf.float32)
+                    u_s = tf.map_fn(lambda i: tf_slice(new_s, i), batch_index, dtype=tf.float32)
                     assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 with tf.variable_scope('HIGHWAY-B'):
@@ -201,18 +206,22 @@ class CoattentionModel():
                     b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
 
                     # Update current end position
-                    e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
-                    assertion(e, "e", [FLAGS.batch_size])
+                    new_e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
+                    assertion(new_e, "new_e", [FLAGS.batch_size])
                     # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-                    u_e = tf.map_fn(lambda i: select(e, i), batch_index, dtype=tf.float32)
+                    u_e = tf.map_fn(lambda i: tf_slice(new_e, i), batch_index, dtype=tf.float32)
                     assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
-                a = tf.reshape(a, [FLAGS.batch_size, -1])
-                b = tf.reshape(b, [FLAGS.batch_size, -1])
-                assertion(a, "a", [FLAGS.batch_size, FLAGS.max_document_size + 1])
-                assertion(b, "b", [FLAGS.batch_size, FLAGS.max_document_size + 1])
+                a = tf.reshape(a, [FLAGS.batch_size, FLAGS.max_document_size + 1])
+                b = tf.reshape(b, [FLAGS.batch_size, FLAGS.max_document_size + 1])
                 alpha.append(a)
                 beta.append(b)
+
+                if s == new_s and e == new_e:
+                    break
+                
+                s = new_s
+                e = new_e
 
         return (alpha, beta)
 
@@ -227,22 +236,23 @@ class CoattentionModel():
 
         alpha = decoded[0]
         beta = decoded[1]
-        y = self.span_placeholder
+        label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
+        label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
 
-        La = [tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, y[:, 0]))
-              for a in alpha]
-        Lb = [tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, y[:, 1]))
-              for b in beta]
-        return tf.reduce_sum([La, Lb], name='loss')
+        La = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, label_a))
+              for a in alpha])
+        Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
+              for b in beta])
+        return (La + Lb)
         # fn = lambda logit, label: loss_shared(logit, label)
-        # loss_alpha = [fn(a, y[:, 0]) for a in alpha]
-        # loss_beta = [fn(b, y[:, 1]) for b in beta]
+        # loss_alpha = [fn(a, label_a) for a in alpha]
+        # loss_beta = [fn(b, label_b) for b in beta]
         # return tf.reduce_sum([loss_alpha, loss_beta], name='loss')
 
     def add_training_op(self, loss, debug_shape=False):
-        optimizer = tf.train.AdamOptimizer(tf.to_float(FLAGS.learning_rate))
+        optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
         (grad, var) = zip(*optimizer.compute_gradients(loss))
-        (grad, _) = tf.clip_by_global_norm(grad, tf.cast(FLAGS.max_gradient_norm, tf.float32))
+        # (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
         return optimizer.apply_gradients(zip(grad, var))
 
     def build(self, debug_shape):
@@ -250,8 +260,8 @@ class CoattentionModel():
         self.preprocessed = self.preprocessing(debug_shape)
         self.encoded = self.encode(self.preprocessed, debug_shape)
         self.decoded = self.decode(self.encoded, debug_shape)
-        self.loss = self.loss(self.decoded, debug_shape)
-        self.train_op = self.add_training_op(self.loss, debug_shape)
+        self.lost = self.loss(self.decoded, debug_shape)
+        self.train_op = self.add_training_op(self.lost, debug_shape)
 
     def debug_shape(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
