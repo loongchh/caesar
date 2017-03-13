@@ -4,6 +4,7 @@ import tensorflow as tf
 
 import util
 import qa_data_util as du
+from ops import *
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -81,7 +82,7 @@ class CoattentionModel():
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
-    def add_preprocessing_op(self, debug_shape=False):
+    def preprocessing(self, debug_shape=False):
         (Q_embed, D_embed) = self.add_embedding()
 
         # Encoding question and document.
@@ -112,7 +113,7 @@ class CoattentionModel():
 
     ## ==============================
     ## COATTENTION ENCODER
-    def add_coattention_op(self, preprocessing, debug_shape=False):
+    def encode(self, preprocessing, debug_shape=False):
         Q = preprocessing[0]
         D = preprocessing[1]
 
@@ -149,18 +150,57 @@ class CoattentionModel():
 
     ## ==============================
     ## DYNAMIC POINTING DECODER
-    def add_dynamic_pointer_op(self, coattention, debug_shape=False):
-        U = coattention
+    def decode(self, coattention, debug_shape=False):
+        U = tf.transpose(coattention, [1, 0, 2])
+        assertion("U", [FLAGS.max_document_size + 1, FLAGS.batch_size, 2 * FLAGS.state_size])
 
-        
-    def highway_maxout()
+        LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
+        HMN_a = highway_maxout(FLAGS.state_size, maxout_size)
+        HMN_b = highway_maxout(FLAGS.state_size, maxout_size)
 
-    def add_loss_op(self, answer_pointer_rep, debug_shape=False):
-        betas = answer_pointer_rep[0]
+        # Get first estimated locations
+        u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
+        u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), [0] * FLAGS.batch_size)))
+        assertion("u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+        assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+        with tf.variable_scope('DECODER'):
+            for step in range(FLAGS.max_decode_steps):
+                if step > 0:
+                    tf.get_variable_scope().reuse_variables()
+                
+                # The dynamic decoder is a state machine
+                (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
+                assertion("h", [FLAGS.state_size])
+
+                with tf.variable_scope('HIGHWAY-A'):
+                    # Start score corresponding to each word in document
+                    alpha = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
+
+                    # Update current start position
+                    s = tf.reshape(tf.argmax(alpha, 0), [batch_size])
+                    assertion("s", [batch_size])
+                    u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+                    assertion("u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+                with tf.variable_scope('HIGHWAY-B'):
+                    # Start score corresponding to each word in document
+                    alpha = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
+
+                    # Update current start position
+                    e = tf.reshape(tf.argmax(alpha, 0), [batch_size])
+                    assertion("e", [batch_size])
+                    u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+                    assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+        return (s, e)
+
+    def loss(self, decoded, debug_shape=False):
+        betas = decoded[0]
         y = self.span_placeholder
         L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
         L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,1,:], y[:,1]))
-        return ((L1+L2)/2.0,) + answer_pointer_rep
+        return ((L1+L2)/2.0,) + decoded
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
@@ -169,10 +209,10 @@ class CoattentionModel():
 
     def build(self, debug_shape):
         self.add_placeholders()
-        self.preprocessing_rep = self.add_preprocessing_op(debug_shape)
-        self.match_lstm_rep = self.add_coattention_op(self.preprocessing_rep, debug_shape)
-        self.answer_pointer_rep = self.add_dynamic_pointer_op(self.match_lstm_rep, debug_shape)
-        self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
+        self.preprocessed = self.preprocessing(debug_shape)
+        self.encoded = self.encode(self.preprocessed, debug_shape)
+        self.decoded = self.decode(self.encoded, debug_shape)
+        self.loss = self.loss(self.decoded, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
     def debug_shape(self, sess, data_batch):
@@ -192,11 +232,11 @@ class CoattentionModel():
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
-        answer_pointer_rep = sess.run(
-            fetches = util.tuple_to_list(*self.answer_pointer_rep),
+        decoded = sess.run(
+            fetches = util.tuple_to_list(*self.decoded),
             feed_dict=feed
         )
-        pred = du.get_answer_from_span(answer_pointer_rep[1])
+        pred = du.get_answer_from_span(decoded[1])
         return pred
 
     def train_on_batch(self, sess, data_batch):
