@@ -71,7 +71,7 @@ class CoattentionModel():
 
     def add_embedding(self):
         all_embeddings = tf.cast(tf.get_variable("embeddings", initializer=self.pretrained_embeddings, 
-                                                 dtype=tf.float64), tf.float32)
+                                                 dtype=tf.float64, trainable=False), tf.float32)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
@@ -252,7 +252,7 @@ class CoattentionModel():
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
         (grad, var) = zip(*optimizer.compute_gradients(loss))
-        # (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
+        (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
         return optimizer.apply_gradients(zip(grad, var))
 
     def build(self, debug_shape):
@@ -267,7 +267,7 @@ class CoattentionModel():
         feed = self.create_feed_dict(data_batch)
 
         train_op_output = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
+            fetches = self.train_op,
             feed_dict=feed
         )
         logger.info("loss: {}".format(train_op_output[1]))
@@ -281,7 +281,7 @@ class CoattentionModel():
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
         decoded = sess.run(
-            fetches = util.tuple_to_list(*self.decoded),
+            fetches = self.decoded,
             feed_dict=feed
         )
         pred = du.get_answer_from_span(decoded[1])
@@ -291,7 +291,7 @@ class CoattentionModel():
         feed = self.create_feed_dict(data_batch)
 
         train_op = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
+            fetches = self.train_op,
             feed_dict=feed
         )
 
