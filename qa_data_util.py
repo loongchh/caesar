@@ -15,7 +15,7 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.100.npz".format(FLAGS.vocab_dim))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
     # vocab, rev_vocab = initialize_vocab()
