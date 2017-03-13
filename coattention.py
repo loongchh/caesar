@@ -207,26 +207,42 @@ class CoattentionModel():
                     u_e = tf.map_fn(lambda i: select(e, i), batch_index, dtype=tf.float32)
                     assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
-                alpha.append(tf.reshape(a, [FLAGS.batch_size, -1]))
-                beta.append(tf.reshape(b, [FLAGS.batch_size, -1]))
+                a = tf.reshape(a, [FLAGS.batch_size, -1])
+                b = tf.reshape(b, [FLAGS.batch_size, -1])
+                assertion(a, "a", [FLAGS.batch_size, FLAGS.max_document_size + 1])
+                assertion(b, "b", [FLAGS.batch_size, FLAGS.max_document_size + 1])
+                alpha.append(a)
+                beta.append(b)
 
         return (alpha, beta)
 
     def loss(self, decoded, debug_shape=False):
+        # def loss_shared(logits, labels):
+        #     labels = tf.reshape(labels, [FLAGS.batch_size])
+        #     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
+        #         logits, labels, name='per_step_cross_entropy')
+        #     cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
+        #     tf.add_to_collection('per_step_losses', cross_entropy_mean)
+        #     return tf.add_n(tf.get_collection('per_step_losses'), name='per_step_loss')
+
         alpha = decoded[0]
         beta = decoded[1]
         y = self.span_placeholder
 
-        L1 = sum(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, y[:, 0]))
-                 for a in alpha)
-        L2 = sum(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, y[:, 1]))
-                 for b in beta)
-        return (L1 + L2)
+        La = [tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, y[:, 0]))
+              for a in alpha]
+        Lb = [tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, y[:, 1]))
+              for b in beta]
+        return tf.reduce_sum([La, Lb], name='loss')
+        # fn = lambda logit, label: loss_shared(logit, label)
+        # loss_alpha = [fn(a, y[:, 0]) for a in alpha]
+        # loss_beta = [fn(b, y[:, 1]) for b in beta]
+        # return tf.reduce_sum([loss_alpha, loss_beta], name='loss')
 
     def add_training_op(self, loss, debug_shape=False):
-        optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
-        (grad, var) = zip(*optimizer.compute_gradients(loss[0]))
-        (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
+        optimizer = tf.train.AdamOptimizer(tf.to_float(FLAGS.learning_rate))
+        (grad, var) = zip(*optimizer.compute_gradients(loss))
+        (grad, _) = tf.clip_by_global_norm(grad, tf.cast(FLAGS.max_gradient_norm, tf.float32))
         return optimizer.apply_gradients(zip(grad, var))
 
     def build(self, debug_shape):
