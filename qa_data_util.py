@@ -3,6 +3,8 @@ import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
 
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 import parse_args
 FLAGS = tf.app.flags.FLAGS
