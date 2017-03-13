@@ -195,7 +195,7 @@ def train():
 
                 # TODO: Checkpoint model
 
-            make_prediction_plot(losses, grad_norms)
+            make_training_plots(losses, grad_norms)
 
             # train_writer.close()
 
