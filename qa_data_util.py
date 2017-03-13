@@ -3,6 +3,9 @@ import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
 
+import matplotlib
+matplotlib.use('Agg')
+import matplotlib.pyplot as plt
 import parse_args
 FLAGS = tf.app.flags.FLAGS
 
@@ -12,9 +15,18 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.840B.300.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
-    logger.debug("loaded glove embeddings of vocab size: {}".format(len(embeddings)))
+    embeddings=embeddings.astype(np.float32)
+    # vocab, rev_vocab = initialize_vocab()
+    # for word in vocab:
+    #     if word[0].islower():
+    #         w = word[0].upper() + word[1:]
+    #         if w in vocab:
+    #             embeddings[vocab[w]] = embeddings[vocab[word]]
+    # zeros = np.sum([1 for x in embeddings if np.all(x==0)])
+    # logger.debug("loaded glove embeddings of vocab size: {} with {} zero vector".format(len(embeddings), zeros))
+
     return embeddings
 
 
@@ -59,7 +71,6 @@ def load_dataset(type='train', plot=False):
         plot_histogram(contexts, "{}-contexts-filtered".format(type))
         plot_histogram(questions, "{}-questions-filtered".format(type))
         plot_histogram(ground_truth, "{}-answers-filtered".format(type))
-
 
     questions, questions_mask, questions_seq = padding(questions, 15)
     contexts, contexts_mask, contexts_seq = padding(contexts, 120)
@@ -124,11 +135,7 @@ def padding(data, max_length, zero_vector=0, include_one_padding_in_length=False
 
     return data, mask,seq
 
-
 def plot_histogram(data,name ):
-    # import only if required
-    import matplotlib.pyplot as plt
-
     data_lengths = [len(x) for x in data]
     logger.debug("max length for {} = {}".format(name,max(data_lengths)))
     plt.clf()
@@ -153,22 +160,47 @@ def initialize_vocab():
         raise ValueError("Vocabulary file %s not found.", vocab_path)
 
 
-def get_batch(data, i):
+def get_batch(data, i, permutation=None):
     start = i*FLAGS.batch_size
     end = (i+1)*FLAGS.batch_size
 
+    if permutation is not None:
+        indices = permutation[start:end]
+    else:
+        indices = range(start, end)
+
     batch = {}
     for k in data:
-        batch[k] = data[k][start:end]
+        batch[k] = [data[k][idx] for idx in indices]
 
     return batch
 
+
+def test_get_batch():
+    data = {
+        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size
+    }
+    # test without permutation
+    assert get_batch(data,1) == {"q": [[3,4,6]]*FLAGS.batch_size}
+
+    # test with simple permutation
+    permutation = range(FLAGS.batch_size,2*FLAGS.batch_size)+range(0,FLAGS.batch_size)
+    actual = get_batch(data, 1, permutation=permutation)
+    expected = {"q": [[1,2,3]]*FLAGS.batch_size}
+    assert actual == expected
+
+    # test with random permutation
+    permutation =np.random.permutation(2*FLAGS.batch_size)
+    actual = get_batch(data, 1, permutation=permutation)
+    expected = {"q": [[1, 2, 3] if idx < FLAGS.batch_size else [3, 4, 6] for i, idx in enumerate(permutation) if i >= FLAGS.batch_size]}
+    assert actual == expected
+
 if __name__ == '__main__':
     parse_args.parse_args()
-
-
-    # embeddings = load_embeddings()
-    # vocab, rev_vocab = initialize_vocab()
+    test_get_batch()
+    exit()
+    embeddings = load_embeddings()
+    vocab, rev_vocab = initialize_vocab()
     # for word in vocab:
     #     if word[0].islower():
     #         w = word[0].upper() + word[1:]
@@ -179,8 +211,5 @@ if __name__ == '__main__':
     #
     # print embeddings[vocab['Who']]
     # exit()
-
-    # test_clip_and_pad()
-
     train_data = load_dataset(type = "train", plot=True)
     val_data = load_dataset(type = "val", plot=True)
