@@ -180,11 +180,11 @@ def train():
             session.run(init)
 
             losses = []
-            grad_norms = {"Q_LSTM/RNN/LSTMCell":[],
-                             "P_LSTM/RNN/LSTMCell":[],
-                             "Match_LSTM_fwd/LSTMCell":[],
-                             "Match_LSTM_rev/LSTMCell":[],
-                             "ANSWER_POINTER/LSTMCell":[],
+            grad_norms = {"Q_LSTM-RNN-LSTMCell":[],
+                             "P_LSTM-RNN-LSTMCell":[],
+                             "Match_LSTM_fwd-LSTMCell":[],
+                             "Match_LSTM_rev-LSTMCell":[],
+                             "ANSWER_POINTER-LSTMCell":[],
                              "REST":[]
                              }
             for epoch in range(FLAGS.epochs):
