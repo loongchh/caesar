@@ -165,6 +165,9 @@ class CoattentionModel():
         assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope('DECODER'):
+            alpha = []
+            beta = []
+
             for step in range(FLAGS.max_decode_steps):
                 if step > 0:
                     tf.get_variable_scope().reuse_variables()
@@ -175,32 +178,39 @@ class CoattentionModel():
 
                 with tf.variable_scope('HIGHWAY-A'):
                     # Start score corresponding to each word in document
-                    alpha = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
+                    a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
 
                     # Update current start position
-                    s = tf.reshape(tf.argmax(alpha, 0), [batch_size])
+                    s = tf.reshape(tf.argmax(a, 0), [batch_size])
                     assertion("s", [batch_size])
                     u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
                     assertion("u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 with tf.variable_scope('HIGHWAY-B'):
                     # Start score corresponding to each word in document
-                    alpha = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
+                    b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
 
                     # Update current start position
-                    e = tf.reshape(tf.argmax(alpha, 0), [batch_size])
+                    e = tf.reshape(tf.argmax(b, 0), [batch_size])
                     assertion("e", [batch_size])
                     u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
                     assertion("u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
-        return (s, e)
+                alpha.append(a)
+                beta.append(b)
+
+        return (alpha, beta)
 
     def loss(self, decoded, debug_shape=False):
-        betas = decoded[0]
+        alpha = decoded[0]
+        beta = decoded[1]
         y = self.span_placeholder
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,1,:], y[:,1]))
-        return ((L1+L2)/2.0,) + decoded
+
+        L1 = sum(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, y[:, 0]))
+                 for a in alpha)
+        L2 = sum(tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, y[:, 1]))
+                 for b in beta)
+        return (L1 + L2)
 
     def add_training_op(self, loss, debug_shape=False):
         train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
