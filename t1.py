@@ -40,11 +40,11 @@ def choose_model(embeddings, debug_shape=False):
 def train_epoch(train_data, model, session, losses, grad_norms):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
     prog = Progbar(target=num_train_batches)
-
+    permutation = np.random.permutation(num_train_batches*FLAGS.batch_size)
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
-        data_batch = du.get_batch(train_data, i)
+        data_batch = du.get_batch(train_data, i, permutation=permutation)
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
         for j,grad in enumerate(grad_norm):

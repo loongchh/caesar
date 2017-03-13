@@ -164,19 +164,41 @@ def get_batch(data, i, permutation=None):
     start = i*FLAGS.batch_size
     end = (i+1)*FLAGS.batch_size
 
-    # if permutation is not None:
-    #     indices =
+    if permutation is not None:
+        indices = permutation[start:end]
+    else:
+        indices = range(start, end)
 
     batch = {}
     for k in data:
-        batch[k] = data[k][start:end]
+        batch[k] = [data[k][idx] for idx in indices]
 
     return batch
 
+
+def test_get_batch():
+    data = {
+        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size
+    }
+    # test without permutation
+    assert get_batch(data,1) == {"q": [[3,4,6]]*FLAGS.batch_size}
+
+    # test with simple permutation
+    permutation = range(FLAGS.batch_size,2*FLAGS.batch_size)+range(0,FLAGS.batch_size)
+    actual = get_batch(data, 1, permutation=permutation)
+    expected = {"q": [[1,2,3]]*FLAGS.batch_size}
+    assert actual == expected
+
+    # test with random permutation
+    permutation =np.random.permutation(2*FLAGS.batch_size)
+    actual = get_batch(data, 1, permutation=permutation)
+    expected = {"q": [[1, 2, 3] if idx < FLAGS.batch_size else [3, 4, 6] for i, idx in enumerate(permutation) if i >= FLAGS.batch_size]}
+    assert actual == expected
+
 if __name__ == '__main__':
     parse_args.parse_args()
-
-
+    test_get_batch()
+    exit()
     embeddings = load_embeddings()
     vocab, rev_vocab = initialize_vocab()
     # for word in vocab:
