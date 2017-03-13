@@ -11,6 +11,7 @@ from util import Progbar
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
+from collections import OrderedDict
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -45,13 +46,9 @@ def train_epoch(train_data, model, session, losses, grad_norms):
         data_batch = du.get_batch(train_data, i)
         grad_norm, loss, pred = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
-        grad_norms["Q_LSTM/RNN/LSTMCell"].append(grad_norm[0])
-        grad_norms["P_LSTM/RNN/LSTMCell"].append(grad_norm[1])
-        grad_norms["Match_LSTM_fwd/LSTMCell"].append(grad_norm[2])
-        grad_norms["Match_LSTM_rev/LSTMCell"].append(grad_norm[3])
-        grad_norms["ANSWER_POINTER/LSTMCell"].append(grad_norm[4])
-        grad_norms["REST"].append(grad_norm[5])
-        prog.update(i+1, [("grad_norm", np.average(grad_norm)), ("train loss", loss)])
+        for i,k in enumerate(grad_norms):
+            grad_norms[k].append(grad_norm[i])
+        prog.update(i+1, [("grad_norm", np.sum(grad_norm)), ("train loss", loss)])
     print ""
     return grad_norms, losses
 
@@ -180,13 +177,13 @@ def train():
             session.run(init)
 
             losses = []
-            grad_norms = {"Q_LSTM-RNN-LSTMCell":[],
-                             "P_LSTM-RNN-LSTMCell":[],
-                             "Match_LSTM_fwd-LSTMCell":[],
-                             "Match_LSTM_rev-LSTMCell":[],
-                             "ANSWER_POINTER-LSTMCell":[],
-                             "REST":[]
-                             }
+            grad_norms=OrderedDict()
+            grad_norms["Q_LSTM-RNN-LSTMCell"] = []
+            grad_norms["P_LSTM-RNN-LSTMCell"] = []
+            grad_norms["Match_LSTM_fwd-LSTMCell"] = []
+            grad_norms["Match_LSTM_rev-LSTMCell"] = []
+            grad_norms["ANSWER_POINTER-LSTMCell"] = []
+            grad_norms["REST"] = []
             for epoch in range(FLAGS.epochs):
 
                 # run_metadata = tf.RunMetadata()
