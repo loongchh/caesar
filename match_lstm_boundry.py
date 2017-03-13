@@ -87,11 +87,11 @@ class MatchLstmBoundryModel():
         if data_batch['a_s'] is not None:
             feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
 
-
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32)
+        # all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32)
+        all_embeddings = self.pretrained_embeddings
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
@@ -206,7 +206,7 @@ class MatchLstmBoundryModel():
             hr = cell.zero_state(FLAGS.batch_size, tf.float32)
             Hr = []
             for i, H_Pi in enumerate(H_P):
-                if i>0:
+                if i > 0:
                     tf.get_variable_scope().reuse_variables()
                 Wq_HQ = tf.einsum('ijk,kl->ijl', H_Q, W_q)
                 Wp_HPi = tf.matmul(H_P[i], W_p)
