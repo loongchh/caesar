@@ -206,7 +206,7 @@ def train():
 
 def make_prediction_plot(losses, grad_norms):
     losses = np.array(losses)
-
+    plt.clf()
     for i,key in enumerate(grad_norms):
         plt.subplot(2, 1, 1)
         plt.title("Loss")
