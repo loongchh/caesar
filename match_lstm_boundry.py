@@ -351,8 +351,9 @@ class MatchLstmBoundryModel():
         (grad, _) = tf.clip_by_global_norm(grad, 15.0)
 
         grad_norm = []
+        logger.info("----------all trainable variables picked for grad norm------------------")
         for i,v in enumerate(var):
-            logger.info("----------all trainable variables picked for grad norm------------------")
+
             logger.info(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
         grad_norm = tf.pack(grad_norm)
