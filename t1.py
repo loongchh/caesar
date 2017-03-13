@@ -8,7 +8,9 @@ import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
+import matplotlib
 import matplotlib.pyplot as plt
+matplotlib.use('Agg')
 
 FLAGS = tf.app.flags.FLAGS
 
