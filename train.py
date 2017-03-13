@@ -189,7 +189,7 @@ def train():
 
                 logger.info("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
                 # Training
-                grad_norms, losses = train_epoch(train_data, model, session,losses, grad_norms)
+                grad_norms, losses = train_epoch(val_data, model, session,losses, grad_norms)
                 # Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
 

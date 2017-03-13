@@ -222,11 +222,11 @@ class CoattentionModel():
                 s = new_s
                 e = new_e
 
-        return (alpha, beta)
+        return ((alpha, beta), (s, e))
 
     def loss(self, decoded, debug_shape=False):
-        alpha = decoded[0]
-        beta = decoded[1]
+        alpha = decoded[0][0]
+        beta = decoded[0][1]
         label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
         label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
 
@@ -253,7 +253,7 @@ class CoattentionModel():
         grad_norm = tf.pack(grad_norm)
         train_op = optimizer.apply_gradients(zip(grad, var))
 
-        return (train_op, grad_norm) + (loss, )
+        return (train_op, grad_norm, loss)
 
     def build(self, debug_shape):
         self.add_placeholders()
@@ -281,10 +281,10 @@ class CoattentionModel():
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
         answer_pointer_rep = sess.run(
-            fetches = util.tuple_to_list(*self.answer_pointer_rep),
+            fetches = util.tuple_to_list(*self.decoded),
             feed_dict=feed
         )
-        pred = du.get_answer_from_span(answer_pointer_rep[1])
+        pred = du.get_answer_from_span([answer_pointer_rep[1]])
         return pred
 
     def train_on_batch(self, sess, data_batch):
