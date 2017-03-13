@@ -121,9 +121,9 @@ class CoattentionModel():
         assertion(L, "L", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
 
         # Normalize with respect to question/document.
-        Aq = tf.nn.softmax(L, dim=2)
+        Aq = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
         assertion(Aq, "Aq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
-        Ad = tf.transpose(tf.nn.softmax(L, dim=1), [0, 2, 1])
+        Ad = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, perm=[0, 2, 1]), dtype=tf.float32)
         assertion(Ad, "Ad", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
 
         # Attention of the document w.r.t question.
@@ -225,14 +225,6 @@ class CoattentionModel():
         return (alpha, beta)
 
     def loss(self, decoded, debug_shape=False):
-        # def loss_shared(logits, labels):
-        #     labels = tf.reshape(labels, [FLAGS.batch_size])
-        #     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(
-        #         logits, labels, name='per_step_cross_entropy')
-        #     cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
-        #     tf.add_to_collection('per_step_losses', cross_entropy_mean)
-        #     return tf.add_n(tf.get_collection('per_step_losses'), name='per_step_loss')
-
         alpha = decoded[0]
         beta = decoded[1]
         label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
@@ -243,10 +235,6 @@ class CoattentionModel():
         Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
               for b in beta])
         return (La + Lb)
-        # fn = lambda logit, label: loss_shared(logit, label)
-        # loss_alpha = [fn(a, label_a) for a in alpha]
-        # loss_beta = [fn(b, label_b) for b in beta]
-        # return tf.reduce_sum([loss_alpha, loss_beta], name='loss')
 
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
@@ -259,13 +247,13 @@ class CoattentionModel():
         grad_norm = []
         logger.info("----------all trainable variables picked for grad norm------------------")
         for i,v in enumerate(var):
-
             logger.info(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
+
         grad_norm = tf.pack(grad_norm)
         train_op = optimizer.apply_gradients(zip(grad, var))
 
-        return (train_op, grad_norm) + loss
+        return (train_op, grad_norm) + (loss, )
 
     def build(self, debug_shape):
         self.add_placeholders()
@@ -283,7 +271,7 @@ class CoattentionModel():
             feed_dict=feed
         )
         logger.info("grads: {}".format(train_op_output[1]))
-        # logger.info("loss: {}".format(train_op_output[2]))
+        logger.info("loss: {}".format(train_op_output[2]))
         # logger.info("pred: {}".format(train_op_output[4]))
 
         # for i, tensor in enumerate(self.train_op):
