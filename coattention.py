@@ -224,8 +224,10 @@ class CoattentionModel():
         return (L1 + L2)
 
     def add_training_op(self, loss, debug_shape=False):
-        train_op = tf.train.AdamOptimizer(FLAGS.learning_rate).minimize(loss[0])
-        return (train_op,) + loss
+        optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
+        (grad, var) = zip(*optimizer.compute_gradients(loss[0]))
+        (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
+        return optimizer.apply_gradients(zip(grad, var))
 
     def build(self, debug_shape):
         self.add_placeholders()
