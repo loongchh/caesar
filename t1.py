@@ -193,6 +193,9 @@ def train():
                 EMs.append(em)
                 # TODO: Checkpoint model
 
+                logger.info(F1s)
+                logger.info(EMs)
+
             make_training_plots(losses, grad_norms, F1s, EMs)
 
             # train_writer.close()
