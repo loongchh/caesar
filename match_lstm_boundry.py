@@ -405,8 +405,8 @@ class MatchLstmBoundryModel():
         self.match_lstm_rep = self.add_match_lstm_op(self.preprocessing_rep, debug_shape)
         # self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
         # self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
-        self.ffl_rep = self.add_feed_forward_op(self.match_lstm_rep, debug_shape)
-        self.loss = self.add_loss_op(self.ffl_rep, debug_shape)
+        self.answer_pointer_rep = self.add_feed_forward_op(self.match_lstm_rep, debug_shape)
+        self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
     def debug_shape(self, sess, data_batch):
