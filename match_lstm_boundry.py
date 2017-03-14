@@ -227,7 +227,7 @@ class MatchLstmBoundryModel():
                 zi = tf.concat(1, [H_P[i], HQ_alphai])
 
                 _, hr = cell(zi, hr)
-                Hr.append(hr[1])
+                Hr.append(hr[0])
 
             Hr = tf.pack(Hr,1)
 
