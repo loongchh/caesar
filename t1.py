@@ -150,8 +150,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
         # prog.update(i+1, [("Avg F1", f1)])
     print ""
     logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/batch_size, em_sum, data_size))
-    return f1_sum/batch_size, em_sum/batch_size
-
+    return f1_sum/batch_size, em_sum
 
 def train():
     logger.info("----------------Training model-----------------------------")
@@ -222,7 +221,7 @@ def make_training_plots(losses, grad_norms, F1s, EMs):
         # -----------------------
         EMs = np.array(EMs)
         plt.figure()
-        plt.title("EM Count (out of {1360})")
+        plt.title("EM Count (out of 1360)")
         plt.plot(np.arange(EMs.size), EMs.flatten(), label="EM Count")
         plt.ylabel("EM Count")
         pdf.savefig()
