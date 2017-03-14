@@ -18,14 +18,9 @@ def load_embeddings():
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
-    # vocab, rev_vocab = initialize_vocab()
-    # for word in vocab:
-    #     if word[0].islower():
-    #         w = word[0].upper() + word[1:]
-    #         if w in vocab:
-    #             embeddings[vocab[w]] = embeddings[vocab[word]]
-    # zeros = np.sum([1 for x in embeddings if np.all(x==0)])
-    # logger.debug("loaded glove embeddings of vocab size: {} with {} zero vector".format(len(embeddings), zeros))
+
+    zeros = np.sum([1 for x in embeddings if np.all(x==0)])
+    logger.debug("loaded glove embeddings of vocab size: {} with {} zero vector".format(len(embeddings), zeros))
 
     return embeddings
 

@@ -90,8 +90,7 @@ class MatchLstmBoundryModel():
         return feed_dict
 
     def add_embedding(self):
-        # all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32)
-        all_embeddings = self.pretrained_embeddings
+        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32, trainable=True)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
