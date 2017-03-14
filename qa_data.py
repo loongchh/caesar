@@ -148,7 +148,7 @@ class CoreNLPTokenizer:
         self.nlp = StanfordCoreNLP('http://localhost:9000')
 
     def __call__(self, *args, **kwargs):
-        output = self.nlp.annotate(args[0], properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
+        output = self.nlp.annotate(args[0].decode('utf-8').strip(), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
         return [t['word'] for t in output['sentences'][0]['tokens']]
 
 

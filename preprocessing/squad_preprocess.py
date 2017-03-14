@@ -86,8 +86,9 @@ def list_topics(data):
 
 
 def tokenize(sequence):
-    output = nlp.annotate(sequence.decode('utf-8').strip(), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
-    return [t['word'] for t in output['sentences'][0]['tokens']]
+    print (sequence)
+    output = nlp.annotate(sequence, properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
+    return [t['word'].encode('utf-8') for t in output['sentences'][0]['tokens']]
 
 
 
