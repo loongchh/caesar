@@ -187,4 +187,4 @@ if __name__ == '__main__':
     x_dis_path = valid_path + ".ids.context"
     y_ids_path = valid_path + ".ids.question"
     data_to_token_ids(valid_path + ".context", x_dis_path, vocab_path)
-    data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path)
+    data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path, tokenizer=CoreNLPTokenizer())
