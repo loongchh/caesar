@@ -153,13 +153,13 @@ class CoattentionModel():
     ## ==============================
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
-        Hr = coattention
-        assert_shape(Hr, "Hr", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+        H_r = coattention
+        assert_shape(H_r, "H_r", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope("ANSWER_POINTER"):
-            cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=False)
+            cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
-            assert_shape(ha, "ha", [FLAGS.batch_size, FLAGS.state_size])
+            assert_shape(ha[1], "ha[1]", [FLAGS.batch_size, FLAGS.state_size])
             beta = []
 
             V = tf.get_variable('V', shape=(2 * FLAGS.state_size, FLAGS.state_size),
@@ -170,32 +170,33 @@ class CoattentionModel():
                                   initializer=tf.constant_initializer(0.))
             v = tf.get_variable('v', shape=(1, FLAGS.state_size), dtype=tf.float32,
                                 initializer=tf.contrib.layers.xavier_initializer())
-            c = tf.get_variable('c', dtype=tf.float32, initializer=tf.constant_initializer(0.))
+            c = tf.get_variable('c', shape=(1, 1), dtype=tf.float32, initializer=tf.constant_initializer(0.))
 
             for k in range(2):
                 if k > 0:
                     tf.get_variable_scope().reuse_variables()
 
-                VH_r = tf.einsum('ijk,kl->ijl', Hr, V)
+                VH_r = tf.einsum('ijk,kl->ijl', H_r, V)
                 assert_shape(VH_r, "VH_r", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
-                W_aH_ab_a = tf.matmul(ha, W_a) + b_a
+                W_aH_ab_a = tf.matmul(ha[1], W_a) + b_a
                 assert_shape(W_aH_ab_a, "W_aH_ab_a", [FLAGS.batch_size, FLAGS.state_size])
+                W_aH_ab_a = tf.expand_dims(W_aH_ab_a, axis=1)
                 F_k = tf.nn.tanh(VH_r + tf.tile(W_aH_ab_a, [1, FLAGS.max_document_size, 1]))
-                F_k = tf.transpose(F_k, [0, 2, 1])
+                F_k = tf.transpose(F_k, perm=[0, 2, 1])
                 assert_shape(F_k, "F_k", [FLAGS.batch_size, FLAGS.state_size, FLAGS.max_document_size])
                 
                 v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
                 assert_shape(v_tF_k, "v_tF_k", [FLAGS.batch_size, 1, FLAGS.max_document_size])
-                beta_k = tf.nn.softmax(v_tF_k + tf.tile(c, [FLAGS.batch_size, 1, FLAGS.max_document_size]))
+                beta_k = tf.nn.softmax(v_tF_k + tf.tile(c, [1, FLAGS.max_document_size]))
                 assert_shape(beta_k, "beta_k", [FLAGS.batch_size, 1, FLAGS.max_document_size])
 
-                Hr_beta_k = tf.squeeze(tf.batch_matmul(beta_k, Hr))
-                assert_shape(Hr_beta_k, "Hr_beta_k", [FLAGS.batch_size, 2 * FLAGS.state_size])
+                H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
+                assert_shape(H_rbeta_k, "H_rbeta_k", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
                 beta.append(beta_k)
-                (_, ha) = cell(Hr_beta_k, ha)
+                (_, ha) = cell(H_rbeta_k, ha)
 
-        return tf.pack(beta, 1)
+        return (tf.pack(beta, axis=1), tf.argmax(beta, axis=2))
 
         # U = tf.transpose(coattention, [1, 0, 2])
         # assert_shape(U, "U", [FLAGS.max_document_size, FLAGS.batch_size, 2 * FLAGS.state_size])
@@ -269,10 +270,12 @@ class CoattentionModel():
         # return ((alpha, beta), (s, e))
 
     def loss(self, decoded, debug_shape=False):
-        betas = answer_pointer_rep[0]
+        beta = decoded[0]
         y = self.span_placeholder
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,1,:], y[:,1]))
+        a_s = tf.squeeze(beta[:, 0, :], squeeze_dims=1)
+        a_e = tf.squeeze(beta[:, 1, :], squeeze_dims=1)
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a_s, y[:, 0]))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a_e, y[:, 1]))
         return (L1 + L2) / 2.0
         # alpha = decoded[0][0]
         # beta = decoded[0][1]
