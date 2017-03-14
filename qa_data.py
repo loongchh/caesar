@@ -7,7 +7,7 @@ import os
 import re
 import tarfile
 import argparse
-from pycorenlp import StanfordCoreNLP
+# from pycorenlp import StanfordCoreNLP
 
 from six.moves import urllib
 
@@ -142,14 +142,14 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
                     tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
 
 
-class CoreNLPTokenizer:
-
-    def __init__(self):
-        self.nlp = StanfordCoreNLP('http://localhost:9000')
-
-    def __call__(self, *args, **kwargs):
-        output = self.nlp.annotate(args[0].decode('utf-8').strip(), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
-        return [t['word'] for t in output['sentences'][0]['tokens']]
+# class CoreNLPTokenizer:
+#
+#     def __init__(self):
+#         self.nlp = StanfordCoreNLP('http://localhost:9000')
+#
+#     def __call__(self, *args, **kwargs):
+#         output = self.nlp.annotate(args[0].encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
+#         return [t['word'] for t in output['sentences'][0]['tokens']]
 
 
 if __name__ == '__main__':
@@ -164,8 +164,7 @@ if __name__ == '__main__':
                       [pjoin(args.source_dir, "train.context"),
                        pjoin(args.source_dir, "train.question"),
                        pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question")],
-                      tokenizer=CoreNLPTokenizer())
+                       pjoin(args.source_dir, "val.question")],)
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
@@ -187,4 +186,4 @@ if __name__ == '__main__':
     x_dis_path = valid_path + ".ids.context"
     y_ids_path = valid_path + ".ids.question"
     data_to_token_ids(valid_path + ".context", x_dis_path, vocab_path)
-    data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path, tokenizer=CoreNLPTokenizer())
+    data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path)
