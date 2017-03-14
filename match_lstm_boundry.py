@@ -269,7 +269,7 @@ class MatchLstmBoundryModel():
                                  dtype=tf.float32,
                                  initializer=tf.constant_initializer(0.0)
                                  )
-            h = tf.reshape(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
+            h = tf.transpose(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas,2)
 
