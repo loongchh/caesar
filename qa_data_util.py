@@ -97,7 +97,7 @@ def cast_to_int(data):
 def filter_data(questions, contexts, spans, exploded_spans):
 
     def filter(q_len, c_len, a_len=1):
-        filter1 = FLAGS.min_quesion_size < q_len <= FLAGS.max_quesion_size
+        filter1 = FLAGS.min_question_size < q_len <= FLAGS.max_question_size
         filter2 = FLAGS.min_document_size < c_len <= FLAGS.max_document_size
         filter3 = FLAGS.min_answer_size < a_len <= FLAGS.max_answer_size
         return filter1 and filter2 and filter3
