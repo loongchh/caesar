@@ -4,7 +4,7 @@ import tensorflow as tf
 
 import util
 import qa_data_util as du
-from ops import *
+# from ops import *
 
 FLAGS = tf.app.flags.FLAGS
 
