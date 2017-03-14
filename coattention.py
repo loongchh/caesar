@@ -13,7 +13,7 @@ logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
-def assertion(var, var_name, expected):
+def assert_shape(var, var_name, expected):
     shape = var.get_shape().as_list()
     assert shape == expected, \
         "{} of incorrect shape. Expected {}, got {}".format(var_name, expected, shape)
@@ -74,8 +74,8 @@ class CoattentionModel():
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
-        # assertion(question_embeddings, "question_embeddings", [FLAGS.batch_size, FLAGS.max_question_size + 1, None])
-        # assertion(document_embeddings, "document_embeddings", [FLAGS.batch_size, FLAGS.max_document_size + 1, None])
+        # assert_shape(question_embeddings, "question_embeddings", [FLAGS.batch_size, FLAGS.max_question_size, None])
+        # assert_shape(document_embeddings, "document_embeddings", [FLAGS.batch_size, FLAGS.max_document_size, None])
 
         return question_embeddings, document_embeddings
 
@@ -91,12 +91,12 @@ class CoattentionModel():
             tf.get_variable_scope().reuse_variables()
             (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
         
-        assertion(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
-        assertion(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
+        assert_shape(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
 
         # Add sentinel to the end of document/question.
-        Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
-        D = tf.concat_v2([D, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
+        # Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
+        # D = tf.concat_v2([D, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -106,8 +106,8 @@ class CoattentionModel():
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
             Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
 
-        assertion(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
-        assertion(D, "D", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.state_size])
+        assert_shape(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
         return (Q, D)
 
     ## ==============================
@@ -118,27 +118,27 @@ class CoattentionModel():
 
         # Affinity matrix.
         L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
-        assertion(L, "L", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
+        assert_shape(L, "L", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.max_document_size])
 
         # Normalize with respect to question/document.
-        Aq = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
-        assertion(Aq, "Aq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.max_document_size + 1])
-        Ad = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, perm=[0, 2, 1]), dtype=tf.float32)
-        assertion(Ad, "Ad", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
+        A_q = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
+        assert_shape(A_q, "A_q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.max_document_size])
+        A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
+        assert_shape(A_d, "A_d", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.max_question_size])
 
         # Attention of the document w.r.t question.
-        Cq = tf.batch_matmul(Aq, D)
-        assertion(Cq, "Cq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
+        C_q = tf.batch_matmul(A_q, D)
+        assert_shape(C_q, "C_q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
-        Cd = tf.concat_v2([tf.batch_matmul(Ad, Q), tf.batch_matmul(Ad, Cq)], 2)
-        assertion(Cd, "Cd", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
+        C_d = tf.concat_v2([tf.batch_matmul(A_d, Q), tf.batch_matmul(A_d, C_q)], 2)
+        assert_shape(C_d, "C_d", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
         # Fusion of temporal information to the coattention context
         with tf.variable_scope("COATTENTION"):
-            coatt = tf.concat_v2([D, Cd], 2)
-            assertion(coatt, "coatt", [FLAGS.batch_size, FLAGS.max_document_size + 1, 3 * FLAGS.state_size])
+            coatt = tf.concat_v2([D, C_d], 2)
+            assert_shape(coatt, "coatt", [FLAGS.batch_size, FLAGS.max_document_size, 3 * FLAGS.state_size])
             
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
@@ -146,115 +146,162 @@ class CoattentionModel():
                 sequence_length=self.document_seq_placeholder)
             U = tf.concat_v2(U, 2)
         
-        assertion(U, "U", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
+        assert_shape(U, "U", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
         return U
 
 
     ## ==============================
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
-        U = tf.transpose(coattention, [1, 0, 2])
-        assertion(U, "U", [FLAGS.max_document_size + 1, FLAGS.batch_size, 2 * FLAGS.state_size])
+        Hr = coattention
+        assert_shape(Hr, "Hr", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
-        LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
-        h = LSTM_dec.zero_state(FLAGS.state_size, dtype=tf.float32)
-        HMN_a = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
-        HMN_b = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
-
-        batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
-        def tf_slice(pos, idx):
-            return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
-
-        # Get first estimated locations
-        s = [0] * FLAGS.batch_size
-        e = self.document_seq_placeholder
-        # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-        # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-        u_s = tf.map_fn(lambda i: tf_slice(s, i), batch_index, dtype=tf.float32)
-        u_e = tf.map_fn(lambda i: tf_slice(e, i), batch_index, dtype=tf.float32)
-        assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
-        assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
-
-        with tf.variable_scope('DECODER'):
-            alpha = []
+        with tf.variable_scope("ANSWER_POINTER"):
+            cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=False)
+            ha = cell.zero_state(FLAGS.batch_size, tf.float32)
+            assert_shape(ha, "ha", [FLAGS.batch_size, FLAGS.state_size])
             beta = []
 
-            for step in range(FLAGS.max_decode_steps):
-                if step > 0:
+            V = tf.get_variable('V', shape=(2 * FLAGS.state_size, FLAGS.state_size),
+                                dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            W_a = tf.get_variable('W_a', shape=(FLAGS.state_size, FLAGS.state_size),
+                                  dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
+            b_a = tf.get_variable('b_a', shape=(FLAGS.state_size), dtype=tf.float32,
+                                  initializer=tf.constant_initializer(0.))
+            v = tf.get_variable('v', shape=(1, FLAGS.state_size), dtype=tf.float32,
+                                initializer=tf.contrib.layers.xavier_initializer())
+            c = tf.get_variable('c', dtype=tf.float32, initializer=tf.constant_initializer(0.))
+
+            for k in range(2):
+                if k > 0:
                     tf.get_variable_scope().reuse_variables()
+
+                VH_r = tf.einsum('ijk,kl->ijl', Hr, V)
+                assert_shape(VH_r, "VH_r", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
+                W_aH_ab_a = tf.matmul(ha, W_a) + b_a
+                assert_shape(W_aH_ab_a, "W_aH_ab_a", [FLAGS.batch_size, FLAGS.state_size])
+                F_k = tf.nn.tanh(VH_r + tf.tile(W_aH_ab_a, [1, FLAGS.max_document_size, 1]))
+                F_k = tf.transpose(F_k, [0, 2, 1])
+                assert_shape(F_k, "F_k", [FLAGS.batch_size, FLAGS.state_size, FLAGS.max_document_size])
                 
-                # The dynamic decoder is a state machine
-                (_, state) = tf.nn.rnn(LSTM_dec, [tf.concat_v2([u_s, u_e], 1)], dtype=tf.float32)
-                h = tf.concat(1, state)
-                # (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
-                # assertion(h, "h", [FLAGS.state_size])
+                v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
+                assert_shape(v_tF_k, "v_tF_k", [FLAGS.batch_size, 1, FLAGS.max_document_size])
+                beta_k = tf.nn.softmax(v_tF_k + tf.tile(c, [FLAGS.batch_size, 1, FLAGS.max_document_size]))
+                assert_shape(beta_k, "beta_k", [FLAGS.batch_size, 1, FLAGS.max_document_size])
 
-                with tf.variable_scope('HIGHWAY-A'):
-                    # Start score corresponding to each word in document
-                    a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
+                Hr_beta_k = tf.squeeze(tf.batch_matmul(beta_k, Hr))
+                assert_shape(Hr_beta_k, "Hr_beta_k", [FLAGS.batch_size, 2 * FLAGS.state_size])
 
-                    # Update current start position
-                    new_s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
-                    assertion(new_s, "new_s", [FLAGS.batch_size])
-                    # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-                    u_s = tf.map_fn(lambda i: tf_slice(new_s, i), batch_index, dtype=tf.float32)
-                    assertion(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+                beta.append(beta_k)
+                (_, ha) = cell(Hr_beta_k, ha)
 
-                with tf.variable_scope('HIGHWAY-B'):
-                    # End score corresponding to each word in document
-                    b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
+        return tf.pack(beta, 1)
 
-                    # Update current end position
-                    new_e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
-                    assertion(new_e, "new_e", [FLAGS.batch_size])
-                    # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-                    u_e = tf.map_fn(lambda i: tf_slice(new_e, i), batch_index, dtype=tf.float32)
-                    assertion(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+        # U = tf.transpose(coattention, [1, 0, 2])
+        # assert_shape(U, "U", [FLAGS.max_document_size, FLAGS.batch_size, 2 * FLAGS.state_size])
 
-                a = tf.reshape(a, [FLAGS.batch_size, FLAGS.max_document_size + 1])
-                b = tf.reshape(b, [FLAGS.batch_size, FLAGS.max_document_size + 1])
-                alpha.append(a)
-                beta.append(b)
+        # LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
+        # h = LSTM_dec.zero_state(FLAGS.state_size, dtype=tf.float32)
+        # HMN_a = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
+        # HMN_b = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
 
-                if s == new_s and e == new_e:
-                    break
+        # batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
+        # def tf_slice(pos, idx):
+        #     return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
+
+        # # Get first estimated locations
+        # s = [0] * FLAGS.batch_size
+        # e = self.document_seq_placeholder
+        # # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+        # # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+        # u_s = tf.map_fn(lambda i: tf_slice(s, i), batch_index, dtype=tf.float32)
+        # u_e = tf.map_fn(lambda i: tf_slice(e, i), batch_index, dtype=tf.float32)
+        # assert_shape(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+        # assert_shape(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+        # with tf.variable_scope('DECODER'):
+        #     alpha = []
+        #     beta = []
+
+        #     for step in range(FLAGS.max_decode_steps):
+        #         if step > 0:
+        #             tf.get_variable_scope().reuse_variables()
                 
-                s = new_s
-                e = new_e
+        #         # The dynamic decoder is a state machine
+        #         (_, state) = tf.nn.rnn(LSTM_dec, [tf.concat_v2([u_s, u_e], 1)], dtype=tf.float32)
+        #         h = tf.concat(1, state)
+        #         # (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
+        #         # assert_shape(h, "h", [FLAGS.state_size])
 
-        return ((alpha, beta), (s, e))
+        #         with tf.variable_scope('HIGHWAY-A'):
+        #             # Start score corresponding to each word in document
+        #             a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
+
+        #             # Update current start position
+        #             new_s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
+        #             assert_shape(new_s, "new_s", [FLAGS.batch_size])
+        #             # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
+        #             u_s = tf.map_fn(lambda i: tf_slice(new_s, i), batch_index, dtype=tf.float32)
+        #             assert_shape(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+        #         with tf.variable_scope('HIGHWAY-B'):
+        #             # End score corresponding to each word in document
+        #             b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
+
+        #             # Update current end position
+        #             new_e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
+        #             assert_shape(new_e, "new_e", [FLAGS.batch_size])
+        #             # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
+        #             u_e = tf.map_fn(lambda i: tf_slice(new_e, i), batch_index, dtype=tf.float32)
+        #             assert_shape(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
+
+        #         a = tf.reshape(a, [FLAGS.batch_size, FLAGS.max_document_size])
+        #         b = tf.reshape(b, [FLAGS.batch_size, FLAGS.max_document_size])
+        #         alpha.append(a)
+        #         beta.append(b)
+
+        #         if s == new_s and e == new_e:
+        #             break
+                
+        #         s = new_s
+        #         e = new_e
+
+        # return ((alpha, beta), (s, e))
 
     def loss(self, decoded, debug_shape=False):
-        alpha = decoded[0][0]
-        beta = decoded[0][1]
-        assertion(alpha[0], "alpha[0]", [FLAGS.batch_size, FLAGS.max_document_size + 1])
-        assertion(beta[0], "beta[0]", [FLAGS.batch_size, FLAGS.max_document_size + 1])
-        label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
-        label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
+        betas = answer_pointer_rep[0]
+        y = self.span_placeholder
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,0,:], y[:,0]))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(betas[:,1,:], y[:,1]))
+        return (L1 + L2) / 2.0
+        # alpha = decoded[0][0]
+        # beta = decoded[0][1]
+        # assert_shape(alpha[0], "alpha[0]", [FLAGS.batch_size, FLAGS.max_document_size])
+        # assert_shape(beta[0], "beta[0]", [FLAGS.batch_size, FLAGS.max_document_size])
+        # label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
+        # label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
 
-        La = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, label_a))
-                            for a in alpha])
-        Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
-                            for b in beta])
-        return (La + Lb) / 2
+        # La = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, label_a))
+        #                     for a in alpha])
+        # Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
+        #                     for b in beta])
+        # return (La + Lb) / 2
 
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
 
         gradients = optimizer.compute_gradients(loss)
         (grad, var) = zip(*gradients)
-
-        (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+        (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
 
         grad_norm = []
         logger.info("----------all trainable variables picked for grad norm------------------")
         for i,v in enumerate(var):
             logger.info(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
-
         grad_norm = tf.pack(grad_norm)
-        train_op = optimizer.apply_gradients(zip(grad, var))
 
+        train_op = optimizer.apply_gradients(zip(grad, var))
         return (train_op, grad_norm, loss)
 
     def build(self, debug_shape):
