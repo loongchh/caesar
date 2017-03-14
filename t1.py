@@ -223,7 +223,7 @@ def make_training_plots(losses, grad_norms, F1s, EMs):
         EMs = np.array(EMs)
         plt.figure()
         plt.title("EM Count (out of {1360})")
-        plt.plot(np.arange(EMs.size), losses.flatten(), label="EM Count")
+        plt.plot(np.arange(EMs.size), EMs.flatten(), label="EM Count")
         plt.ylabel("EM Count")
         pdf.savefig()
         plt.close()
