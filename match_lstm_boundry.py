@@ -419,7 +419,7 @@ class MatchLstmBoundryModel():
         feed = self.create_feed_dict(data_batch)
 
         train_op_output = sess.run(
-            fetches = self.train_op,
+            fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
         logger.info("grads: {}".format(train_op_output[1]))
@@ -433,7 +433,7 @@ class MatchLstmBoundryModel():
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
         answer_pointer_rep = sess.run(
-            fetches = self.answer_pointer_rep,
+            fetches = util.tuple_to_list(*self.answer_pointer_rep),
             feed_dict=feed
         )
         pred = du.get_answer_from_span(answer_pointer_rep[1])
@@ -443,7 +443,7 @@ class MatchLstmBoundryModel():
         feed = self.create_feed_dict(data_batch)
 
         train_op = sess.run(
-            fetches = self.train_op,
+            fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
 
