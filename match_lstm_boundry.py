@@ -90,8 +90,7 @@ class MatchLstmBoundryModel():
         return feed_dict
 
     def add_embedding(self):
-        # all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32)
-        all_embeddings = self.pretrained_embeddings
+        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32, trainable=True)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
@@ -168,18 +167,21 @@ class MatchLstmBoundryModel():
             W_q =tf.get_variable(name='W_q',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 # initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
                                  )
             W_p =tf.get_variable(name='W_p',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             W_r =tf.get_variable(name='W_r',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_p =tf.get_variable(name='b_p',
@@ -251,6 +253,46 @@ class MatchLstmBoundryModel():
 
         return match_lstm_rep
 
+
+    ####################################################
+    ##### Simple Feed Forward Prediction Layer #########
+    ####################################################
+
+    def add_feed_forward_op(self, match_lstm_rep, debug_shape=False):
+        Hr = match_lstm_rep[0]
+        with tf.variable_scope("Feed_Forward_Prediction"):
+            W1 =tf.get_variable(name='W1',
+                               shape = [2*FLAGS.state_size, 2],
+                               dtype=tf.float32,
+                               initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                # initializer=tf.contrib.layers.xavier_initializer()
+                               )
+
+            b1 =tf.get_variable(name='b1',
+                                 shape = [2],
+                                 dtype=tf.float32,
+                                 initializer=tf.constant_initializer(0.0)
+                                 )
+            h = tf.transpose(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
+            betas = tf.nn.softmax(h)
+            pred = tf.argmax(betas,2)
+
+            answer_pointer_rep = (betas, pred)
+
+        if debug_shape:
+            return answer_pointer_rep+(
+                tf.shape(h,name="debug_FFL_h"),
+                tf.shape(betas,name="debug_FFL_betas"),
+                tf.shape(pred,name="debug_FFL_pred"),
+            ) + match_lstm_rep
+
+        return answer_pointer_rep + match_lstm_rep
+
+
+
+
+
+
     ####################################
     ##### Answer Pointer Layer #########
     ####################################
@@ -259,15 +301,17 @@ class MatchLstmBoundryModel():
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
-                                 shape = [2*FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
+                               shape = [2*FLAGS.state_size, FLAGS.state_size],
+                               dtype=tf.float32,
+                               initializer=tf.truncated_normal_initializer(stddev=0.1)
+                               # initializer=tf.contrib.layers.xavier_initializer()
+                               )
 
             W_a =tf.get_variable(name='W_a',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_a =tf.get_variable(name='b_a',
@@ -348,7 +392,7 @@ class MatchLstmBoundryModel():
         gradients = optimizer.compute_gradients(loss[0])
         (grad, var) = zip(*gradients)
 
-        (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+        (grad, _) = tf.clip_by_global_norm(grad, 5.0)
 
         grad_norm = []
         logger.info("----------all trainable variables picked for grad norm------------------")
@@ -367,6 +411,8 @@ class MatchLstmBoundryModel():
         self.match_lstm_rep = self.add_match_lstm_op(self.preprocessing_rep, debug_shape)
         self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
         self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
+        # self.answer_pointer_rep = self.add_feed_forward_op(self.match_lstm_rep, debug_shape)
+        # self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
     def debug_shape(self, sess, data_batch):

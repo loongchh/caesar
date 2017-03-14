@@ -8,11 +8,7 @@ import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
-from collections import OrderedDict
+from datetime import datetime
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -150,8 +146,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
         # prog.update(i+1, [("Avg F1", f1)])
     print ""
     logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/batch_size, em_sum, data_size))
-    return f1_sum/batch_size, em_sum/batch_size
-
+    return f1_sum/batch_size, em_sum
 
 def train():
     logger.info("----------------Training model-----------------------------")
@@ -179,8 +174,10 @@ def train():
             # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
-            losses = []
+            F1s, EMs, losses = [], [], []
             grad_norms = [[] for i,j in enumerate(tf.trainable_variables())] # grad_norm array for all the variables
+
+
             for epoch in range(FLAGS.epochs):
 
                 # TODO: tensorboard summary writer
@@ -192,38 +189,67 @@ def train():
                 grad_norms, losses = train_epoch(val_data, model, session,losses, grad_norms)
                 # Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
-
+                F1s.append(f1)
+                EMs.append(em)
                 # TODO: Checkpoint model
 
-            make_training_plots(losses, grad_norms)
+                logger.info(F1s)
+                logger.info(EMs)
+
+            make_training_plots(losses, grad_norms, F1s, EMs)
 
             # train_writer.close()
 
     logger.info("Model did not crash!")
     logger.info("Passed!")
+    logger.info(FLAGS.comment)
 
 
-def make_training_plots(losses, grad_norms):
-    with PdfPages("../plots/{}.pdf".format(FLAGS.model)) as pdf:
-        plt.clf()
-        # -----------------------
-        losses = np.array(losses)
-        plt.figure()
-        plt.title("Loss")
-        plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
-        plt.ylabel("Loss")
-        pdf.savefig()
-        plt.close()
-
-        for i,v in enumerate(tf.trainable_variables()):
-            norm = np.array(grad_norms[i])
+def make_training_plots(losses, grad_norms, F1s, EMs):
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_pdf import PdfPages
+        now = datetime.utcnow()
+        with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, now)) as pdf:
+            plt.clf()
+            # -----------------------
+            F1s = np.array(F1s)
             plt.figure()
-            plt.title(v.name)
-            plt.plot(np.arange(norm.size), norm.flatten(), label="v.name")
-            plt.ylabel("v.name")
+            plt.title("F1 Score")
+            plt.plot(np.arange(F1s.size), F1s.flatten(), label="F1 Score")
+            plt.ylabel("F1 Score")
+            pdf.savefig()
+            plt.close()
+            # -----------------------
+            EMs = np.array(EMs)
+            plt.figure()
+            plt.title("EM Count (out of 1360)")
+            plt.plot(np.arange(EMs.size), EMs.flatten(), label="EM Count")
+            plt.ylabel("EM Count")
+            pdf.savefig()
+            plt.close()
+            # -----------------------
+            losses = np.array(losses)
+            plt.figure()
+            plt.title("Loss")
+            plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
+            plt.ylabel("Loss")
             pdf.savefig()
             plt.close()
 
+            for i,v in enumerate(tf.trainable_variables()):
+                norm = np.array(grad_norms[i])
+                plt.figure()
+                plt.title(v.name)
+                plt.plot(np.arange(norm.size), norm.flatten(), label=v.name)
+                plt.ylabel(v.name)
+                pdf.savefig()
+                plt.close()
+
+    except ImportError:
+        pass
 
 def log_total_parametes():
 

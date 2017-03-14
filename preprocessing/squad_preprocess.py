@@ -8,6 +8,8 @@ import os
 import sys
 from tqdm import tqdm
 import random
+from pycorenlp import StanfordCoreNLP
+nlp = StanfordCoreNLP('http://localhost:9000')
 
 from collections import Counter
 from six.moves.urllib.request import urlretrieve
@@ -76,9 +78,20 @@ def list_topics(data):
     return list_topics
 
 
+# def tokenize(sequence):
+#     tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
+#     return map(lambda x:x.encode('utf8'), tokens)
+
+
+
+
 def tokenize(sequence):
-    tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
-    return map(lambda x:x.encode('utf8'), tokens)
+    print (sequence)
+    output = nlp.annotate(sequence, properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
+    return [t['word'].encode('utf-8') for t in output['sentences'][0]['tokens']]
+
+
+
 
 
 def token_idx_map(context, context_tokens):
