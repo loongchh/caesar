@@ -209,7 +209,7 @@ class MatchLstmBoundryModel():
                     tf.get_variable_scope().reuse_variables()
                 Wq_HQ = tf.einsum('ijk,kl->ijl', H_Q, W_q)
                 Wp_HPi = tf.matmul(H_P[i], W_p)
-                Wr_Hr = tf.matmul(hr[1], W_r)
+                Wr_Hr = tf.matmul(hr[0], W_r)
                 Gi = Wp_HPi + Wr_Hr + b_p
                 Gi = tf.reshape(
                     tensor=tf.tile(Gi, [1,FLAGS.max_question_size]),
@@ -295,7 +295,7 @@ class MatchLstmBoundryModel():
                 if k > 0:
                     tf.get_variable_scope().reuse_variables()
                 V_Hr = tf.einsum('ijk,kl->ijl', Hr, V)
-                Wa_Ha = tf.matmul(ha[1], W_a)
+                Wa_Ha = tf.matmul(ha[0], W_a)
                 Fk = Wa_Ha + b_a
                 Fk = tf.reshape(
                     tensor=tf.tile(Fk, [1,FLAGS.max_document_size]),

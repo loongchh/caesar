@@ -12,7 +12,7 @@ import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
-from collections import OrderedDict
+from datetime import datetime
 
 
 FLAGS = tf.app.flags.FLAGS
@@ -179,8 +179,10 @@ def train():
             # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
             session.run(init)
 
-            losses = []
+            F1s, EMs, losses = [], [], []
             grad_norms = [[] for i,j in enumerate(tf.trainable_variables())] # grad_norm array for all the variables
+
+
             for epoch in range(FLAGS.epochs):
 
                 # TODO: tensorboard summary writer
@@ -192,10 +194,11 @@ def train():
                 grad_norms, losses = train_epoch(train_data, model, session,losses, grad_norms)
                 # Evaluation
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
-
+                F1s.append(f1)
+                EMs.append(em)
                 # TODO: Checkpoint model
 
-            make_training_plots(losses, grad_norms)
+            make_training_plots(losses, grad_norms, F1s, EMs)
 
             # train_writer.close()
 
@@ -203,9 +206,28 @@ def train():
     logger.info("Passed!")
 
 
-def make_training_plots(losses, grad_norms):
-    with PdfPages("../plots/{}.pdf".format(FLAGS.model)) as pdf:
+def make_training_plots(losses, grad_norms, F1s, EMs):
+    now = datetime.utcnow()
+    with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, now)) as pdf:
         plt.clf()
+        # -----------------------
+        F1s = np.array(F1s)
+        plt.figure()
+        plt.title("F1 Score")
+        plt.plot(np.arange(F1s.size), F1s.flatten(), label="F1 Score")
+        plt.ylabel("F1 Score")
+        pdf.savefig()
+        plt.close()
+
+        # -----------------------
+        EMs = np.array(EMs)
+        plt.figure()
+        plt.title("EM Count (out of {1360})")
+        plt.plot(np.arange(EMs.size), losses.flatten(), label="EM Count")
+        plt.ylabel("EM Count")
+        pdf.savefig()
+        plt.close()
+
         # -----------------------
         losses = np.array(losses)
         plt.figure()
@@ -219,8 +241,8 @@ def make_training_plots(losses, grad_norms):
             norm = np.array(grad_norms[i])
             plt.figure()
             plt.title(v.name)
-            plt.plot(np.arange(norm.size), norm.flatten(), label="v.name")
-            plt.ylabel("v.name")
+            plt.plot(np.arange(norm.size), norm.flatten(), label=v.name)
+            plt.ylabel(v.name)
             pdf.savefig()
             plt.close()
 
