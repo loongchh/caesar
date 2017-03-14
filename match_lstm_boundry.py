@@ -250,6 +250,45 @@ class MatchLstmBoundryModel():
 
         return match_lstm_rep
 
+
+    ####################################################
+    ##### Simple Feed Forward Prediction Layer #########
+    ####################################################
+
+    def add_feed_forward_op(self, match_lstm_rep, debug_shape=False):
+        Hr = match_lstm_rep[0]
+        with tf.variable_scope("Feed_Forward_Prediction"):
+            W1 =tf.get_variable(name='W1',
+                               shape = [2*FLAGS.state_size, 2],
+                               dtype=tf.float32,
+                               initializer=tf.contrib.layers.xavier_initializer()
+                               )
+
+            b1 =tf.get_variable(name='b1',
+                                 shape = [2],
+                                 dtype=tf.float32,
+                                 initializer=tf.constant_initializer(0.0)
+                                 )
+            h = tf.reshape(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
+            betas = tf.nn.softmax(h)
+            pred = tf.argmax(betas,2)
+
+            answer_pointer_rep = (betas, pred)
+
+        if debug_shape:
+            return answer_pointer_rep+(
+                tf.shape(h,name="debug_FFL_h"),
+                tf.shape(betas,name="debug_FFL_betas"),
+                tf.shape(pred,name="debug_FFL_pred"),
+            ) + match_lstm_rep
+
+        return answer_pointer_rep + match_lstm_rep
+
+
+
+
+
+
     ####################################
     ##### Answer Pointer Layer #########
     ####################################
@@ -364,8 +403,10 @@ class MatchLstmBoundryModel():
         self.add_placeholders()
         self.preprocessing_rep = self.add_preprocessing_op(debug_shape)
         self.match_lstm_rep = self.add_match_lstm_op(self.preprocessing_rep, debug_shape)
-        self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
-        self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
+        # self.answer_pointer_rep = self.add_answer_pointer_op(self.match_lstm_rep, debug_shape)
+        # self.loss = self.add_loss_op(self.answer_pointer_rep, debug_shape)
+        self.ffl_rep = self.add_feed_forward_op(self.match_lstm_rep, debug_shape)
+        self.loss = self.add_loss_op(self.ffl_rep, debug_shape)
         self.train_op = self.add_training_op(self.loss, debug_shape)
 
     def debug_shape(self, sess, data_batch):
