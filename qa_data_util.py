@@ -3,9 +3,6 @@ import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
 
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
 import parse_args
 FLAGS = tf.app.flags.FLAGS
 
@@ -15,7 +12,7 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.vocab_dim))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
 
@@ -67,9 +64,9 @@ def load_dataset(type='train', plot=False):
         plot_histogram(questions, "{}-questions-filtered".format(type))
         plot_histogram(ground_truth, "{}-answers-filtered".format(type))
 
-    questions, questions_mask, questions_seq = padding(questions, 15)
-    contexts, contexts_mask, contexts_seq = padding(contexts, 120)
-    answers, answers_mask, answers_seq = padding(ground_truth, 6, zero_vector=120, include_one_padding_in_length=True)
+    questions, questions_mask, questions_seq = padding(questions, FLAGS.max_question_size)
+    contexts, contexts_mask, contexts_seq = padding(contexts, FLAGS.max_document_size)
+    answers, answers_mask, answers_seq = padding(ground_truth,FLAGS.max_answer_size, zero_vector=FLAGS.max_document_size)
 
     if plot:
         plot_histogram(contexts, "{}-contexts-padded".format(type))
@@ -100,7 +97,10 @@ def cast_to_int(data):
 def filter_data(questions, contexts, spans, exploded_spans):
 
     def filter(q_len, c_len, a_len=1):
-        return 5 < q_len <= 15 and 80 < c_len <= 120 and a_len <= 5
+        filter1 = FLAGS.min_quesion_size < q_len <= FLAGS.max_quesion_size
+        filter2 = FLAGS.min_document_size < c_len <= FLAGS.max_document_size
+        filter3 = FLAGS.min_answer_size < a_len <= FLAGS.max_answer_size
+        return filter1 and filter2 and filter3
 
     indices = [i for i, q in enumerate(questions) if filter(len(q), len(contexts[i]), len(exploded_spans[i])) ]
 
@@ -120,27 +120,32 @@ def get_answer_from_span(spans):
     return [fun(s[0], s[1]) for s in spans]
 
 
-def padding(data, max_length, zero_vector=0, include_one_padding_in_length=False):
+def padding(data, max_length, zero_vector=0):
     seq = [len(record) for record in data]
-    if include_one_padding_in_length:
-        mask = [min(len(record)+1, max_length)*[True] + (max_length - len(record)-1)*[False] for record in data]
-    else:
-        mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
+    mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
     data = [record[:max_length] + (max_length - len(record))*[zero_vector] for record in data]
 
     return data, mask,seq
 
+
 def plot_histogram(data,name ):
-    data_lengths = [len(x) for x in data]
-    logger.debug("max length for {} = {}".format(name,max(data_lengths)))
-    plt.clf()
-    plt.hist(data_lengths,bins=50)
-    plt.title("Histogram: {}".format(name))
-    plt.xlabel("Value")
-    plt.ylabel("Frequency")
-    plt.legend()
-    output_path = pjoin("../plots/","{}-histogram.png".format(name))
-    plt.savefig(output_path)
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+
+        data_lengths = [len(x) for x in data]
+        logger.debug("max length for {} = {}".format(name,max(data_lengths)))
+        plt.clf()
+        plt.hist(data_lengths,bins=50)
+        plt.title("Histogram: {}".format(name))
+        plt.xlabel("Value")
+        plt.ylabel("Frequency")
+        plt.legend()
+        output_path = pjoin("../plots/","{}-histogram.png".format(name))
+        plt.savefig(output_path)
+    except ImportError:
+        pass
 
 def initialize_vocab():
     vocab_path = FLAGS.vocab_path or pjoin(FLAGS.data_dir, "vocab.dat")

@@ -8,10 +8,6 @@ import qa_data_util as du
 import evaluate
 import parse_args
 from util import Progbar
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-from matplotlib.backends.backend_pdf import PdfPages
 from datetime import datetime
 
 
@@ -206,45 +202,50 @@ def train():
 
 
 def make_training_plots(losses, grad_norms, F1s, EMs):
-    now = datetime.utcnow()
-    with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, now)) as pdf:
-        plt.clf()
-        # -----------------------
-        F1s = np.array(F1s)
-        plt.figure()
-        plt.title("F1 Score")
-        plt.plot(np.arange(F1s.size), F1s.flatten(), label="F1 Score")
-        plt.ylabel("F1 Score")
-        pdf.savefig()
-        plt.close()
-
-        # -----------------------
-        EMs = np.array(EMs)
-        plt.figure()
-        plt.title("EM Count (out of 1360)")
-        plt.plot(np.arange(EMs.size), EMs.flatten(), label="EM Count")
-        plt.ylabel("EM Count")
-        pdf.savefig()
-        plt.close()
-
-        # -----------------------
-        losses = np.array(losses)
-        plt.figure()
-        plt.title("Loss")
-        plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
-        plt.ylabel("Loss")
-        pdf.savefig()
-        plt.close()
-
-        for i,v in enumerate(tf.trainable_variables()):
-            norm = np.array(grad_norms[i])
+    try:
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        from matplotlib.backends.backend_pdf import PdfPages
+        now = datetime.utcnow()
+        with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, now)) as pdf:
+            plt.clf()
+            # -----------------------
+            F1s = np.array(F1s)
             plt.figure()
-            plt.title(v.name)
-            plt.plot(np.arange(norm.size), norm.flatten(), label=v.name)
-            plt.ylabel(v.name)
+            plt.title("F1 Score")
+            plt.plot(np.arange(F1s.size), F1s.flatten(), label="F1 Score")
+            plt.ylabel("F1 Score")
+            pdf.savefig()
+            plt.close()
+            # -----------------------
+            EMs = np.array(EMs)
+            plt.figure()
+            plt.title("EM Count (out of 1360)")
+            plt.plot(np.arange(EMs.size), EMs.flatten(), label="EM Count")
+            plt.ylabel("EM Count")
+            pdf.savefig()
+            plt.close()
+            # -----------------------
+            losses = np.array(losses)
+            plt.figure()
+            plt.title("Loss")
+            plt.plot(np.arange(losses.size), losses.flatten(), label="Loss")
+            plt.ylabel("Loss")
             pdf.savefig()
             plt.close()
 
+            for i,v in enumerate(tf.trainable_variables()):
+                norm = np.array(grad_norms[i])
+                plt.figure()
+                plt.title(v.name)
+                plt.plot(np.arange(norm.size), norm.flatten(), label=v.name)
+                plt.ylabel(v.name)
+                pdf.savefig()
+                plt.close()
+
+    except ImportError:
+        pass
 
 def log_total_parametes():
 
