@@ -392,7 +392,7 @@ class MatchLstmBoundryModel():
         gradients = optimizer.compute_gradients(loss[0])
         (grad, var) = zip(*gradients)
 
-        (grad, _) = tf.clip_by_global_norm(grad, 15.0)
+        (grad, _) = tf.clip_by_global_norm(grad, 5.0)
 
         grad_norm = []
         logger.info("----------all trainable variables picked for grad norm------------------")
