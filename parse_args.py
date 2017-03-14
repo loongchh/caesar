@@ -36,3 +36,5 @@ def parse_args():
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
     tf.app.flags.DEFINE_integer("max_answer_size", 6, "")
 
+    tf.app.flags.DEFINE_string("comment", "", "Comment that will be printed in the end, put some")
+

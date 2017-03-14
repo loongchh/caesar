@@ -199,6 +199,7 @@ def train():
 
     logger.info("Model did not crash!")
     logger.info("Passed!")
+    logger.info(FLAGS.comment)
 
 
 def make_training_plots(losses, grad_norms, F1s, EMs):

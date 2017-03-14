@@ -167,18 +167,21 @@ class MatchLstmBoundryModel():
             W_q =tf.get_variable(name='W_q',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 # initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
                                  )
             W_p =tf.get_variable(name='W_p',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             W_r =tf.get_variable(name='W_r',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_p =tf.get_variable(name='b_p',
@@ -261,7 +264,8 @@ class MatchLstmBoundryModel():
             W1 =tf.get_variable(name='W1',
                                shape = [2*FLAGS.state_size, 2],
                                dtype=tf.float32,
-                               initializer=tf.contrib.layers.xavier_initializer()
+                               initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                # initializer=tf.contrib.layers.xavier_initializer()
                                )
 
             b1 =tf.get_variable(name='b1',
@@ -297,15 +301,17 @@ class MatchLstmBoundryModel():
 
         with tf.variable_scope("ANSWER_POINTER"):
             V =tf.get_variable(name='V',
-                                 shape = [2*FLAGS.state_size, FLAGS.state_size],
-                                 dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
-                                 )
+                               shape = [2*FLAGS.state_size, FLAGS.state_size],
+                               dtype=tf.float32,
+                               initializer=tf.truncated_normal_initializer(stddev=0.1)
+                               # initializer=tf.contrib.layers.xavier_initializer()
+                               )
 
             W_a =tf.get_variable(name='W_a',
                                  shape = [FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 initializer=tf.contrib.layers.xavier_initializer()
+                                 initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                 # initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
             b_a =tf.get_variable(name='b_a',
