@@ -150,6 +150,34 @@ class CoattentionModel():
         return U
 
 
+
+    ####################################################
+    ##### Simple Feed Forward Prediction Layer #########
+    ####################################################
+
+    def add_feed_forward_op(self, coattention, debug_shape=False):
+        Hr = coattention
+        with tf.variable_scope("Feed_Forward_Prediction"):
+            W1 =tf.get_variable(name='W1',
+                               shape = [2*FLAGS.state_size, 2],
+                               dtype=tf.float32,
+                               initializer=tf.truncated_normal_initializer(stddev=0.1)
+                                # initializer=tf.contrib.layers.xavier_initializer()
+                               )
+
+            b1 =tf.get_variable(name='b1',
+                                 shape = [2],
+                                 dtype=tf.float32,
+                                 initializer=tf.constant_initializer(0.0)
+                                 )
+            h = tf.transpose(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
+            betas = tf.nn.softmax(h)
+            pred = tf.argmax(betas,2)
+
+            answer_pointer_rep = (betas, pred)
+
+        return answer_pointer_rep
+
     ## ==============================
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
@@ -312,6 +340,7 @@ class CoattentionModel():
         self.preprocessed = self.preprocessing(debug_shape)
         self.encoded = self.encode(self.preprocessed, debug_shape)
         self.decoded = self.decode(self.encoded, debug_shape)
+        self.decoded = self.add_feed_forward_op(self.encoded, debug_shape)
         self.lost = self.loss(self.decoded, debug_shape)
         self.train_op = self.add_training_op(self.lost, debug_shape)
 
