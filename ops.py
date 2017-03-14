@@ -79,7 +79,7 @@ def batch_linear(args, output_size, bias, bias_start=0.0, scope=None, name=None)
     w_name = "weights_"
     if name is not None: w_name += name
     weights = vs.get_variable(
-        w_name, [output_size, m], dtype=dtype)
+        w_name, [output_size, m], dtype=dtype, initializer=tf.contrib.layers.xavier_initializer())
     res = tf.map_fn(lambda x: math_ops.matmul(weights, x), args)
     if not bias:
       return res

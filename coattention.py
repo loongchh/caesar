@@ -127,12 +127,12 @@ class CoattentionModel():
         assertion(Ad, "Ad", [FLAGS.batch_size, FLAGS.max_document_size + 1, FLAGS.max_question_size + 1])
 
         # Attention of the document w.r.t question.
-        Cq = tf.matmul(Aq, D)
+        Cq = tf.batch_matmul(Aq, D)
         assertion(Cq, "Cq", [FLAGS.batch_size, FLAGS.max_question_size + 1, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
-        Cd = tf.concat_v2([tf.matmul(Ad, Q), tf.matmul(Ad, Cq)], 2)
+        Cd = tf.concat_v2([tf.batch_matmul(Ad, Q), tf.batch_matmul(Ad, Cq)], 2)
         assertion(Cd, "Cd", [FLAGS.batch_size, FLAGS.max_document_size + 1, 2 * FLAGS.state_size])
 
         # Fusion of temporal information to the coattention context
@@ -227,14 +227,16 @@ class CoattentionModel():
     def loss(self, decoded, debug_shape=False):
         alpha = decoded[0][0]
         beta = decoded[0][1]
+        assertion(alpha[0], "alpha[0]", [FLAGS.batch_size, FLAGS.max_document_size + 1])
+        assertion(beta[0], "beta[0]", [FLAGS.batch_size, FLAGS.max_document_size + 1])
         label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
         label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
 
         La = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, label_a))
-              for a in alpha])
+                            for a in alpha])
         Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
-              for b in beta])
-        return (La + Lb)
+                            for b in beta])
+        return (La + Lb) / 2
 
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
@@ -270,8 +272,8 @@ class CoattentionModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
-        logger.info("grads: {}".format(train_op_output[1]))
-        logger.info("loss: {}".format(train_op_output[2]))
+        # logger.info("grads: {}".format(train_op_output[1]))
+        # logger.info("loss: {}".format(train_op_output[2]))
         # logger.info("pred: {}".format(train_op_output[4]))
 
         # for i, tensor in enumerate(self.train_op):
