@@ -7,6 +7,7 @@ import os
 import re
 import tarfile
 import argparse
+from pycorenlp import StanfordCoreNLP
 
 from six.moves import urllib
 
@@ -141,6 +142,16 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
                     tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
 
 
+class CoreNLPTokenizer:
+
+    def __init__(self):
+        self.nlp = StanfordCoreNLP('http://localhost:9000')
+
+    def __call__(self, *args, **kwargs):
+        output = self.nlp.annotate(args[0], properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
+        return [t['word'] for t in output['sentences'][0]['tokens']]
+
+
 if __name__ == '__main__':
     args = setup_args()
     vocab_path = pjoin(args.vocab_dir, "vocab.dat")
@@ -153,7 +164,8 @@ if __name__ == '__main__':
                       [pjoin(args.source_dir, "train.context"),
                        pjoin(args.source_dir, "train.question"),
                        pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question")])
+                       pjoin(args.source_dir, "val.question")],
+                      tokenizer=CoreNLPTokenizer())
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
