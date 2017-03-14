@@ -196,7 +196,9 @@ class CoattentionModel():
                 beta.append(beta_k)
                 (_, ha) = cell(H_rbeta_k, ha)
 
-        return (tf.pack(beta, axis=1), tf.argmax(beta, axis=2))
+            beta = tf.concat_v2(beta, 1)
+            assert_shape(beta, "beta", [FLAGS.batch_size, 2, FLAGS.max_document_size])
+        return (beta, tf.argmax(beta, axis=2))
 
         # U = tf.transpose(coattention, [1, 0, 2])
         # assert_shape(U, "U", [FLAGS.max_document_size, FLAGS.batch_size, 2 * FLAGS.state_size])
@@ -272,10 +274,8 @@ class CoattentionModel():
     def loss(self, decoded, debug_shape=False):
         beta = decoded[0]
         y = self.span_placeholder
-        a_s = tf.squeeze(beta[:, 0, :], squeeze_dims=1)
-        a_e = tf.squeeze(beta[:, 1, :], squeeze_dims=1)
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a_s, y[:, 0]))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a_e, y[:, 1]))
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], y[:, 0]))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], y[:, 1]))
         return (L1 + L2) / 2.0
         # alpha = decoded[0][0]
         # beta = decoded[0][1]
@@ -322,8 +322,8 @@ class CoattentionModel():
             fetches = util.tuple_to_list(*self.train_op),
             feed_dict=feed
         )
-        # logger.info("grads: {}".format(train_op_output[1]))
-        # logger.info("loss: {}".format(train_op_output[2]))
+        logger.info("grads: {}".format(train_op_output[1]))
+        logger.info("loss: {}".format(train_op_output[2]))
         # logger.info("pred: {}".format(train_op_output[4]))
 
         # for i, tensor in enumerate(self.train_op):
@@ -336,7 +336,7 @@ class CoattentionModel():
             fetches = util.tuple_to_list(*self.decoded),
             feed_dict=feed
         )
-        pred = du.get_answer_from_span([answer_pointer_rep[1]])
+        pred = du.get_answer_from_span(answer_pointer_rep[1])
         return pred
 
     def train_on_batch(self, sess, data_batch):
