@@ -37,9 +37,9 @@ def parse_args():
 
     # Training, Debugging, QA Answer
     tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
-    tf.app.flags.DEFINE_integer("debug_shape", 1, "Debug shapes of Tensor")
-    tf.app.flags.DEFINE_integer("train_batch", 1, "No of batches used in training. Set -1 to train on all.")
-    tf.app.flags.DEFINE_integer("val_batch", 1, "No of batches used in validaton. Set -1 to validate on all.")
+    tf.app.flags.DEFINE_integer("debug_shape", 0, "Debug shapes of Tensor")
+    tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
+    tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 1, "Print predicted text after every n epochs")
     # tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")
     # tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
