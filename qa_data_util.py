@@ -14,17 +14,17 @@ logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
-def choose_model(embeddings, debug_shape=False):
+def choose_model(embeddings, debug=False):
     model = None
     if FLAGS.model.lower() == "match_lstm":
         from match_lstm import MatchLstmModel
-        model = MatchLstmModel(embeddings, debug_shape)
+        model = MatchLstmModel(embeddings, debug)
     elif FLAGS.model.lower() == "match_lstm_boundry":
         from match_lstm_boundry import MatchLstmBoundryModel
-        model = MatchLstmBoundryModel(embeddings, debug_shape)
+        model = MatchLstmBoundryModel(embeddings, debug)
     elif FLAGS.model.lower() == "coattention":
         from coattention import CoattentionModel
-        model = CoattentionModel(embeddings, debug_shape)
+        model = CoattentionModel(embeddings, debug)
 
     return model
 
@@ -35,14 +35,14 @@ def checkpoint_model(session,run_id, version=1):
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_path = saver.save(session,pjoin(save_dir, "model-{}.ckpt".format(version)))
-    logger.info("Model saved in file: %s" % save_path)
+    logger.info("Model saved at: %s" % save_path)
 
 
 def restore_model(session, run_id, version=1):
     saver = tf.train.Saver()
     save_path = pjoin(FLAGS.train_dir, FLAGS.model, run_id, "model-{}.ckpt".format(version))
     saver.restore(session, save_path)
-    logger.info("Model restored from file: {}".format(save_path))
+    logger.info("Model restored from: {}".format(save_path))
 
 
 def load_embeddings():
@@ -51,7 +51,7 @@ def load_embeddings():
     embeddings=embeddings.astype(np.float32)
 
     zeros = np.sum([1 for x in embeddings if np.all(x==0)])
-    logger.debug("loaded glove embeddings of vocab size: {} with {} zero vector".format(len(embeddings), zeros))
+    logger.info("Loaded GloVe embeddings of {} vocabs with {} zero vector".format(len(embeddings), zeros))
 
     return embeddings
 
@@ -62,7 +62,7 @@ def read_dataset(filename, truncate_length=10000):
     return [x.strip().split(" ")[:truncate_length] for x in data]
 
 
-def load_dataset(type='train', plot=False):
+def load_dataset(type='train', plot=False, debug=False):
     data_dir = FLAGS.data_dir
     train_path_q = pjoin(data_dir, "{}.ids.question".format(type))
     train_path_c = pjoin(data_dir, "{}.ids.context".format(type))
@@ -73,7 +73,8 @@ def load_dataset(type='train', plot=False):
 
     # Assert data length
     assert len(questions) == len(contexts) and len(contexts) == len(spans)
-    logger.debug("loaded {} data of size {}".format(type, len(questions)))
+    if debug:
+        logger.debug("Loaded {} data of size {}.".format(type, len(questions)))
 
     # cast the data from string to int
     questions = cast_to_int(questions)
@@ -81,9 +82,10 @@ def load_dataset(type='train', plot=False):
     spans = cast_to_int(spans)
 
     # Flatten Answer span to obtain Ground Truth
-    logger.debug("Sample Span {}".format(spans[0]))
     ground_truth = get_answer_from_span(spans)
-    logger.debug("Flattened Answer from span {}".format(ground_truth[0]))
+    if debug:
+        logger.debug("Sample Span: {}".format(spans[0]))
+        logger.debug("Flattened Answer from span: {}".format(ground_truth[0]))
 
     if plot:
         plot_histogram(questions, "{}-questions".format(type))
@@ -92,7 +94,8 @@ def load_dataset(type='train', plot=False):
 
     questions, contexts,spans, ground_truth = filter_data(questions, contexts, spans, ground_truth)
 
-    logger.debug("filtered {} data, new size {}".format(type, len(questions)))
+    if debug:
+        logger.debug("Filtered {} data, new size {}.".format(type, len(questions)))
     if plot:
         plot_histogram(contexts, "{}-contexts-filtered".format(type))
         plot_histogram(questions, "{}-questions-filtered".format(type))

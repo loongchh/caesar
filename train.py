@@ -4,58 +4,56 @@ import time
 import numpy as np
 import tensorflow as tf
 
-import qa_data_util as du
+from qa_data_util import *
 import evaluate
 import parse_args
 from util import Progbar
 from datetime import datetime
 
-
 FLAGS = tf.app.flags.FLAGS
-
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
 def train_epoch(train_data, model, session, losses, grad_norms):
-    num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
+    num_train_batches = int(len(train_data['q']) / FLAGS.batch_size)
     prog = Progbar(target=num_train_batches)
     permutation = np.random.permutation(num_train_batches*FLAGS.batch_size)
     for i in range(num_train_batches):
         if i >= FLAGS.train_batch >= 0:
             break
-        data_batch = du.get_batch(train_data, i, permutation=permutation)
-        grad_norm, loss = model.train_on_batch(sess=session, data_batch=data_batch)
+        data_batch = get_batch(train_data, i, permutation=permutation)
+        (grad_norm, loss) = model.train_on_batch(sess=session, data_batch=data_batch)
         losses.append(loss)
         for j,grad in enumerate(grad_norm):
             grad_norms[j].append(grad)
-        prog.update(i+1, [("grad_norm",np.sum(grad_norm)),("train loss", loss)])
+        prog.update(i+1, [("grad_norm",np.sum(grad_norm)), ("train loss", loss)])
     print ""
     return grad_norms, losses
 
 
 def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_text):
-        f1 = 0
-        em = False
+    f1 = 0
+    em = False
 
-        ground_truth_tokens = [rev_vocab[document[index]] for index in ground_truth]
-        predicted_tokens = [rev_vocab[document[index]] for index in predicted if index < FLAGS.max_document_size]
+    ground_truth_tokens = [rev_vocab[document[index]] for index in ground_truth]
+    predicted_tokens = [rev_vocab[document[index]] for index in predicted if index < FLAGS.max_document_size]
 
-        predicted_text = " ".join(predicted_tokens)
-        ground_truth_text = " ".join(ground_truth_tokens)
+    predicted_text = " ".join(predicted_tokens)
+    ground_truth_text = " ".join(ground_truth_tokens)
 
-        f1 = evaluate.f1_score(predicted_text, ground_truth_text)
-        em = evaluate.exact_match_score(predicted_text, ground_truth_text)
-        if em:
-            logger.info("--------Match!!--------------")
-            logger.info("Ground truth: {}".format(ground_truth_text))
-            logger.info("Predicted Answer: {}".format(predicted_text))
-            logger.info("-----------------------------")
-        elif print_answer_text:
-            logger.info("Ground truth: {}".format(ground_truth_text))
-            logger.info("Predicted Answer: {}".format(predicted_text))
-        return f1, em
+    f1 = evaluate.f1_score(predicted_text, ground_truth_text)
+    em = evaluate.exact_match_score(predicted_text, ground_truth_text)
+    # if em:
+    #     logger.info("--------Match!!--------------")
+    #     logger.info("Ground truth: {}".format(ground_truth_text))
+    #     logger.info("Predicted Answer: {}".format(predicted_text))
+    #     logger.info("-----------------------------")
+    if print_answer_text:
+        logger.info("Ground truth: {}".format(ground_truth_text))
+        logger.info("Predicted Answer: {}".format(predicted_text))
+    return f1, em
 
 
 def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
@@ -81,7 +79,7 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
 
 
 def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
-    logger.info("Dev Evaluation")
+    logger.info("=============== Dev set evaluation ===============")
     f1_sum = 0
     em_sum = 0
     batch_size = FLAGS.batch_size
@@ -93,7 +91,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
     for i in range(num_val_batches):
         if i >= FLAGS.val_batch >= 0:
             break
-        data_batch = du.get_batch(val_data, i)
+        data_batch = get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
         f1_sum_batch, em_sum_batch = evaluate_batch(
             data_batch=data_batch,
@@ -105,25 +103,25 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
         em_sum += em_sum_batch
         # prog.update(i+1, [("Avg F1", f1)])
     print ""
-    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/data_size, em_sum, data_size))
+    logger.info("F1 Score: {}. EM Score: {} out of {}".format(f1_sum / data_size, em_sum, data_size))
     return f1_sum/data_size, em_sum
 
 
 def train():
     run_id = str(datetime.now()).split(".")[0].replace(' ','-').replace(':','-')
-    logger.info("----------------Training model- {} -----------------------------".format(run_id))
-    vocab,rev_vocab = du.initialize_vocab()
+    logger.info("=============== Training model - {} ===============".format(run_id))
+    vocab,rev_vocab = initialize_vocab()
 
-    embeddings = du.load_embeddings()
-    train_data = du.load_dataset(type="train")
-    val_data = du.load_dataset(type="val")
+    embeddings = load_embeddings()
+    train_data = load_dataset(type="train")
+    val_data = load_dataset(type="val")
 
     with tf.Graph().as_default():
 
         logger.info("Building model...",)
         start = time.time()
-        model = du.choose_model(embeddings=embeddings)
-        logger.info("took %.2f seconds", time.time() - start)
+        model = choose_model(embeddings=embeddings)
+        logger.info("Took %.2f seconds.", time.time() - start)
         init = tf.global_variables_initializer()
 
         with tf.Session() as session:
@@ -156,14 +154,15 @@ def train():
                 logger.info(EMs)
                 # Checkpoint model
                 if f1 == max(F1s):
-                    du.checkpoint_model(session, run_id)
+                    logger.info("New best model created! Saving...")
+                    checkpoint_model(session, run_id)
 
             make_training_plots(losses, grad_norms, F1s, EMs, run_id)
 
             # train_writer.close()
 
-    logger.info("Model did not crash!")
-    logger.info("Passed!")
+    # logger.info("Model did not crash!")
+    # logger.info("Passed!")
     logger.info(FLAGS.comment)
 
 
@@ -214,10 +213,10 @@ def make_training_plots(losses, grad_norms, F1s, EMs, run_id):
         pass
 
 def log_total_parametes():
-
+    logger.debug("Trainable variables:")
     total_parameters = 0
     for variable in tf.trainable_variables():
-        logger.info(variable.name)
+        logger.debug(variable.name)
         # shape is an array of tf.Dimension
         shape = variable.get_shape()
         # print(shape)
@@ -228,35 +227,34 @@ def log_total_parametes():
             variable_parametes *= dim.value
         # print(variable_parametes)
         total_parameters += variable_parametes
-    logger.info("total parameters: {}".format(total_parameters))
+    logger.debug("Total parameters in model: {}".format(total_parameters))
 
 
-def debug_shape():
-    embeddings = du.load_embeddings()
-    val_data = du.load_dataset(type = "val")
-    vocab,rev_vocab = du.initialize_vocab()
-    logger.info("----------------Debugging Tensor Shapes-----------------------------")
+def debug():
+    embeddings = load_embeddings()
+    val_data = load_dataset(type = "val", debug=True)
+    vocab,rev_vocab = initialize_vocab()
+    logger.debug("==================== Debug ====================")
     with tf.Graph().as_default():
 
-        logger.info("Building model for Debugging Shape...")
+        logger.debug("Building model...")
         start = time.time()
-        model = du.choose_model(embeddings=embeddings, debug_shape=True)
-        logger.info("took %.2f seconds", time.time() - start)
+        model = choose_model(embeddings=embeddings, debug=True)
+        logger.info("Took %.2f seconds", time.time() - start)
 
         init = tf.global_variables_initializer()
         log_total_parametes()
 
         with tf.Session() as session:
             session.run(init)
-            model.debug_shape(
+            model.debug(
                 session,
-                data_batch=du.get_batch(val_data,0)
+                data_batch=get_batch(val_data,0)
             )
-    logger.info("")
 
 
 if __name__ == "__main__":
     parse_args.parse_args()
-    if FLAGS.debug_shape == 1:
-        debug_shape()
+    if FLAGS.debug == 1:
+        debug()
     train()

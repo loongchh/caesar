@@ -3,7 +3,7 @@ import logging
 import tensorflow as tf
 
 import util
-import qa_data_util as du
+from qa_data_util import get_answer_from_span
 # from ops import *
 
 FLAGS = tf.app.flags.FLAGS
@@ -19,9 +19,9 @@ def assert_shape(var, var_name, expected):
         "{} of incorrect shape. Expected {}, got {}".format(var_name, expected, shape)
 
 class CoattentionModel():
-    def __init__(self, embeddings, debug_shape=False):
+    def __init__(self, embeddings, debug=False):
         self.pretrained_embeddings = embeddings
-        self.build(debug_shape)
+        self._build(debug)
 
     def add_placeholders(self):
         self.question_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_question_size),
@@ -37,7 +37,9 @@ class CoattentionModel():
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
         self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
                                                             name="document_sentence_placeholder")
-        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 3),
+        self.span_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+                                                        name="span_sentence_placeholder")
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
                                                  name="answer_placeholder")
@@ -63,6 +65,8 @@ class CoattentionModel():
             feed_dict[self.document_sentence_placeholder] = data_batch['d_s']
         if 'd_n_s' in data_batch and data_batch['d_n_s'] is not None:
             feed_dict[self.document_n_sentence_placeholder] = data_batch['d_n_s']
+        if 's_s' in data_batch and data_batch['s_s'] is not None:
+            feed_dict[self.span_sentence_placeholder] = data_batch['d_n_s']
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
         if 'a' in data_batch and data_batch['a'] is not None:
@@ -121,11 +125,11 @@ class CoattentionModel():
         assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
 
         # Update answer span in the to the index in summary
-        # NOTE: If the answer is not located in a sentence in the summary, then the 
-        #       eventual calculatd span would be larger than FLAGS.max_summary_size and 
-        #       produce NaN when calculating cross entropy. This is remedied by ignoring 
-        #       NaN values when averaging the loss.
-        ans_sen_order = np.argmax(sen_sim_idx == self.span_placeholder[x, 2])
+        # NOTE: If the answer is not located in a sentence in the summary, then the
+        #       eventual calculated span would be larger than FLAGS.max_summary_size and
+        #       result in NaN during cross entropy calculation. This is remedied by
+        #       ignoring NaN values when averaging the loss.
+        ans_sen_order = np.argmax(sen_sim_idx == self.span_sentence_placeholder[x])
         len_b4_document = sum(sen_len[:ans_sen_order])
         len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_sen_order))
         self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
@@ -135,7 +139,7 @@ class CoattentionModel():
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
-    def preprocessing(self, debug_shape=False):
+    def contextual_preprocessing(self, debug=False):
         (Q_embed, D_embed) = self.add_embedding()
 
         # Encoding question and document.
@@ -157,7 +161,7 @@ class CoattentionModel():
                 q_sen = None
 
             assert_shape(q_sen, "Q_sen", [None, FLAGS.state_size])
-            D = tf.map_fn(lambda x: self.summarize(x, D, q_sen), range(len(D.shape[0])), dtype=tf.float32)
+            D = tf.map_fn(lambda x: self.summarize(x, D, q_sen), range(D.shape[0]), dtype=tf.float32)
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -176,7 +180,7 @@ class CoattentionModel():
 
     ## ==============================
     ## COATTENTION ENCODER
-    def encode(self, preprocessing, debug_shape=False):
+    def coattention_encode(self, preprocessing, debug=False):
         Q = preprocessing[0]
         D = preprocessing[1]
 
@@ -215,8 +219,8 @@ class CoattentionModel():
 
     ## ==============================
     ## FEED FORWARD DECODER
-    def feed_forward_decode(self, coattention, debug_shape=False):
-        Hr = coattention
+    def feed_forward_decode(self, encode, debug=False):
+        Hr = encode
         with tf.variable_scope("Feed_Forward_Prediction"):
             W1 =tf.get_variable(name='W1',
                                shape = [2*FLAGS.state_size, 2],
@@ -237,18 +241,15 @@ class CoattentionModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-            answer_pointer_rep = (betas, pred)
+        return (betas, pred)
 
-        return answer_pointer_rep
-
-    
     ## ==============================
     ## ANSWER POINTER DECODER
-    def answer_pointer(self, coattention, debug_shape=False):
-        H_r = coattention
+    def answer_pointer_decode(self, encode, debug=False):
+        H_r = encode
         assert_shape(H_r, "H_r", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
-        with tf.variable_scope("ANSWER_POINTER"):
+        with tf.variable_scope("answer_pointer_decode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
             ha = cell.zero_state(FLAGS.batch_size, tf.float32)
             assert_shape(ha[1], "ha[1]", [FLAGS.batch_size, FLAGS.state_size])
@@ -290,75 +291,68 @@ class CoattentionModel():
 
             beta = tf.concat(1,beta)
             assert_shape(beta, "beta", [FLAGS.batch_size, 2, FLAGS.max_document_size])
+
         return (beta, tf.argmax(beta, axis=2))
 
-    def loss(self, decoded, debug_shape=False):
-        beta = decoded[0]
+    def cross_entropy_loss(self, decode, debug=False):
+        beta = decode[0]
         y = self.span_placeholder
         L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], y[:, 0]))
         L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], y[:, 1]))
-        return (L1 + L2) / 2.0
+        return (L1 + L2) / 2.
 
-    def add_training_op(self, loss, debug_shape=False):
+    def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
 
         gradients = optimizer.compute_gradients(loss)
         (grad, var) = zip(*gradients)
         (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
-
+        
         grad_norm = []
-        logger.info("----------all trainable variables picked for grad norm------------------")
-        for i,v in enumerate(var):
-            logger.info(v.name)
+        # if debug:
+        #     logger.debug("Trainable variables:")
+        for (i, v) in enumerate(var):
+            # if debug:
+            #     logger.debug(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
         grad_norm = tf.pack(grad_norm)
 
         train_op = optimizer.apply_gradients(zip(grad, var))
         return (train_op, grad_norm, loss)
 
-    def build(self, debug_shape):
+    def _build(self, debug):
         self.add_placeholders()
-        self.preprocessed = self.preprocessing(debug_shape)
-        self.encoded = self.encode(self.preprocessed, debug_shape)
-        # self.decoded = self.answer_pointer(self.encoded, debug_shape)
-        self.decoded = self.feed_forward_decode(self.encoded, debug_shape)
-        self.lost = self.loss(self.decoded, debug_shape)
-        self.train_op = self.add_training_op(self.lost, debug_shape)
+        self.preprocessing = self.contextual_preprocessing(debug)
+        self.encode = self.coattention_encode(self.preprocessing, debug)
+        # self.decode = self.answer_pointer_decode(self.encode, debug)
+        self.decode = self.feed_forward_decode(self.encode, debug)
+        self.loss = self.cross_entropy_loss(self.decode, debug)
+        self.train_op = self.add_train_op(self.loss, debug)
 
-    def debug_shape(self, sess, data_batch):
+    def debug(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
+        debug_output = sess.run(util.tuple_to_list(*self.train_op), feed_dict=feed)
 
-        debug_output = sess.run(
-            fetches = util.tuple_to_list(*self.decoded),
-            feed_dict=feed
-        )
-        # logger.info("grads: {}".format(train_op_output[1]))
-        # logger.info("loss: {}".format(train_op_output[2]))
-        # # logger.info("pred: {}".format(train_op_output[4]))
-        # logger.info(debug_output)
-        for i, tensor in enumerate(self.decoded):
-            if tensor.name.startswith("debug_"):
-                logger.debug("Shape of {} == {}".format(tensor.name[6:], debug_output[i]))
+        logger.debug("Gradient {}".format(debug_output[1]))
+        logger.debug("Loss {}".format(debug_output[2]))
+        # logger.debug("pred: {}".format(debug_output[4]))
+        # logger.debug(debug_output)
+        # for i, tensor in enumerate(self.decode):
+        #     if tensor.name.startswith("debug_"):
+        #         logger.debug("Shape of {} == {}".format(tensor.name[6:], debug_output[i]))
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
-        answer_pointer_rep = sess.run(
-            fetches = util.tuple_to_list(*self.decoded),
-            feed_dict=feed
-        )
-        pred = du.get_answer_from_span(answer_pointer_rep[1])
+        decode_output = sess.run(util.tuple_to_list(*self.decode), feed_dict=feed)
+
+        pred = get_answer_from_span(decode_output[1])
         return pred
 
     def train_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
-
-        train_op = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
-            feed_dict=feed
-        )
-
-        grad_norm = train_op[1]
-        loss = train_op[2]
-        # pred = du.get_answer_from_span(train_op[4])
-
+        train_op_output = sess.run(util.tuple_to_list(*self.train_op), feed_dict=feed)
+        
+        grad_norm = train_op_output[1]
+        loss = train_op_output[2]
+        # pred = get_answer_from_span(train_op[4])
         return grad_norm, loss
