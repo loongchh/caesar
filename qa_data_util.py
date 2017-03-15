@@ -51,7 +51,7 @@ def load_embeddings():
     embeddings=embeddings.astype(np.float32)
 
     zeros = np.sum([1 for x in embeddings if np.all(x==0)])
-    logger.info("Loaded GloVe embeddings of {} vocabs with {} zero vectors.".format(len(embeddings), zeros))
+    logger.info("Loaded GloVe embeddings of {} vocabs with {} zero vectors".format(len(embeddings), int(zeros)))
 
     return embeddings
 
@@ -73,7 +73,7 @@ def load_dataset(type='train', plot=False, debug=False):
 
     # Assert data length
     assert len(questions) == len(contexts) and len(contexts) == len(spans)
-    logger.info("Loaded {} dataset of size {}.".format(type, len(questions)))
+    logger.info("Loaded {} dataset of size {}".format(type, len(questions)))
 
     # cast the data from string to int
     questions = cast_to_int(questions)
@@ -202,7 +202,7 @@ def initialize_vocab():
         vocab = dict([(x, y) for (y, x) in enumerate(rev_vocab)])
         return vocab, rev_vocab
     else:
-        raise ValueError("Vocabulary file %s not found.", vocab_path)
+        raise ValueError("Vocabulary file %s not found", vocab_path)
 
 
 def get_batch(data, i, permutation=None):

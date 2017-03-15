@@ -250,7 +250,7 @@ class CoattentionModel():
 
         with tf.variable_scope("answer_pointer_decode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
-            ha = cell.zero_state(H_r.get_shape()[0], tf.float32)
+            ha = cell.zero_state(tf.shape(H_r)[0], tf.float32)
             assert_shape(ha[1], "ha[1]", [None, FLAGS.state_size])
             beta = []
 
@@ -268,7 +268,8 @@ class CoattentionModel():
                 if k > 0:
                     tf.get_variable_scope().reuse_variables()
 
-                VH_r = tf.einsum('ijk,kl->ijl', H_r, V)
+                VH_r = tf.map_fn(lambda x: tf.matmul(x, V), H_r)
+                # VH_r = tf.einsum('ijk,kl->ijl', H_r, V)
                 assert_shape(VH_r, "VH_r", [None, FLAGS.max_document_size, FLAGS.state_size])
                 W_aH_ab_a = tf.matmul(ha[1], W_a) + b_a
                 assert_shape(W_aH_ab_a, "W_aH_ab_a", [None, FLAGS.state_size])
@@ -277,7 +278,8 @@ class CoattentionModel():
                 F_k = tf.transpose(F_k, perm=[0, 2, 1])
                 assert_shape(F_k, "F_k", [None, FLAGS.state_size, FLAGS.max_document_size])
                 
-                v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
+                v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
+                # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_document_size])
                 beta_k = tf.nn.softmax(v_tF_k + tf.tile(c, [1, FLAGS.max_document_size]))
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_document_size])
@@ -288,7 +290,7 @@ class CoattentionModel():
                 beta.append(beta_k)
                 (_, ha) = cell(H_rbeta_k, ha)
 
-            beta = tf.concat(1,beta)
+            beta = tf.concat(1, beta)
             assert_shape(beta, "beta", [None, 2, FLAGS.max_document_size])
 
         return (beta, tf.argmax(beta, axis=2))
