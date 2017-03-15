@@ -15,6 +15,7 @@ logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
 
 def choose_model(embeddings, debug_shape=False):
+    model = None
     if FLAGS.model.lower() == "match_lstm":
         from match_lstm import MatchLstmModel
         model = MatchLstmModel(embeddings, debug_shape)
@@ -24,8 +25,6 @@ def choose_model(embeddings, debug_shape=False):
     elif FLAGS.model.lower() == "coattention":
         from coattention import CoattentionModel
         model = CoattentionModel(embeddings, debug_shape)
-    else:
-        model = None
 
     return model
 

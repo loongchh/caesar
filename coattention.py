@@ -34,11 +34,12 @@ class CoattentionModel():
                                                    name="document_placeholder")
         self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
-        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
-                                                       name="document_seq_placeholder")
-        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size),
+        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
+        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size, 2),
                                                             name="document_sentence_placeholder")
-        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+        self.document_n_sentence_placeholder = tf.placeholder(tf.int32, shape=(None), 
+                                                              name="document_n_sentence_placeholder")
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 3),
                                                name="span_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
                                                  name="answer_placeholder")
@@ -62,6 +63,8 @@ class CoattentionModel():
             feed_dict[self.dropout_placeholder] = dropout
         if 'd_s' in data_batch and data_batch['d_s'] is not None:
             feed_dict[self.document_sentence_placeholder] = data_batch['d_s']
+        if 'd_n_s' in data_batch and data_batch['d_n_s'] is not None:
+            feed_dict[self.document_n_sentence_placeholder] = data_batch['d_n_s']
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
         if 'a' in data_batch and data_batch['a'] is not None:
@@ -79,12 +82,49 @@ class CoattentionModel():
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
 
-    def truncate_document(self, x, D):
-        max_sentence = tf.reduce_max(self.document_sentence_placeholder[x, :]) + 1
+    def truncate_document(self, x, D, q_sen):
+        n_sentence = self.document_n_sentence_placeholder[x]  # number of sentences in document
+        sentences = []
+        sen_len = []
+        sen_rep = []
 
-        for sen in range(max_sentence):
-            indices = tf.squeeze(tf.where(tf.equal(self.document_sentence_placeholder[x, :], sen)), squeeze_dims=1)
+        for sen in range(n_sentence):
+            idx_from = tf.document_sentence_placeholder(x, 0)  # sentence begin in document
+            idx_to = tf.document_sentence_placeholder(x, 1)  # sentence end in document
+            sentences.append(D[x, idx_from:idx_to, :])
+            sen_len.append(idx_to - idx_from + 1)
             
+            # Sentence-level representation
+            rep = tf.reduce_max(sentences[-1], axis=0) if FLAGS.model.lower() == "max" \
+                                                       else tf.reduce_mean(sentences[-1], axis=0)
+            assert_shape(rep, "rep", [FLAGS.state_size])
+            sen_rep.append(rep)
+        
+        # Normalized sentence-level representation
+        sen_rep = tf.stack(sen_rep, axis=0)
+        assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
+        sen_rep /= tf.sqrt(tf.reduce_sum(tf.square(sen_rep), axis=1, keep_dims=True))
+        assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
+
+        # Similarity between the question rep and each sentence rep
+        sen_sim = tf.matmul(q_sen[x, :], tf.transpose(sen_rep))
+
+        # Reorder sentence in document, then truncate doc to the maximum summary length
+        (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
+        D_summary = tf.concat(sen_sim_sorted, axis=0)[:FLAGS.max_summary_size, :]
+
+        # Update answer span in the to the index in summary
+        # NOTE: If the answer is not located in a sentence in the summary, then the 
+        #       eventual calculatd span would be larger than FLAGS.max_summary_size and 
+        #       produce NaN when calculating cross entropy. This is remedied by ignoring 
+        #       NaN values when averaging the loss.
+        ans_loc_in_sen = np.argmax(sen_sim_idx == self.span_placeholder[x, 2])
+        len_b4_document = sum(sen_len[:ans_loc_in_sen])
+        len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_loc_in_sen))
+        self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
+        self.span_placeholder[x, 1] += len_b4_summary - len_b4_document
+
+        return D_summary
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
@@ -101,16 +141,16 @@ class CoattentionModel():
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
-        if FLAGS.summary_size != FLAGS.max_document_size:
+        if FLAGS.max_summary_size != FLAGS.max_document_size:
             if FLAGS.model.lower() == "max":
-                Q_sen = tf.reduce_max(Q, axis=1)
-            elif FLAGS.model.lower() == "max":
-                Q_sen = tf.reduce_max(Q, axis=1)
+                q_sen = tf.reduce_max(Q, axis=1)
+            elif FLAGS.model.lower() == "mean":
+                q_sen = tf.reduce_mean(Q, axis=1)
             else:
-                Q_sen = None
+                q_sen = None
 
-            assert_shape(Q_sen, "Q_sen", [None, FLAGS.state_size])
-            D = tf.map_fn(lambda x: self.truncate_document(x, D), range(len(D.shape[0])), dtype=tf.float32)
+            assert_shape(q_sen, "Q_sen", [None, FLAGS.state_size])
+            D = tf.map_fn(lambda x: self.truncate_document(x, D, q_sen), range(len(D.shape[0])), dtype=tf.float32)
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):

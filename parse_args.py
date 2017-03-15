@@ -22,7 +22,7 @@ def parse_args():
 
     # Model Specific Parameters
     # Coattention
-    tf.app.flags.DEFINE_integer("summary_size", 300, "Truncate the document to specific length.")
+    tf.app.flags.DEFINE_integer("max_summary_size", 300, "Truncate the document to specific length.")
     tf.app.flags.DEFINE_string("pool", "max", "Pooling mechanism used to summarize each sentence.")
 
     # Directories
