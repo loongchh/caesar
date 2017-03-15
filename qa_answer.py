@@ -71,8 +71,8 @@ def read_dataset(dataset, tier, vocab):
                 question_tokens = tokenize(question)
                 question_uuid = qas[qid]['id']
 
-                context_ids = [str(vocab.get(w, code.qa_data.UNK_ID)) for w in context_tokens]
-                qustion_ids = [str(vocab.get(w, code.qa_data.UNK_ID)) for w in question_tokens]
+                context_ids = [str(vocab.get(w, qa_data.UNK_ID)) for w in context_tokens]
+                qustion_ids = [str(vocab.get(w, qa_data.UNK_ID)) for w in question_tokens]
 
                 context_data.append(' '.join(context_ids))
                 query_data.append(' '.join(qustion_ids))
@@ -121,8 +121,8 @@ def main(_):
     dev_filename = os.path.basename(FLAGS.dev_path)
     contexts, questions, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
 
-    questions = [code.qa_data.basic_tokenizer(records) for records in questions]
-    contexts = [code.qa_data.basic_tokenizer(records) for records in contexts]
+    questions = [qa_data.basic_tokenizer(records) for records in questions]
+    contexts = [qa_data.basic_tokenizer(records) for records in contexts]
 
     questions, questions_mask, questions_seq = du.padding(du.cast_to_int(questions), FLAGS.max_question_size)
     contexts, contexts_mask, contexts_seq = du.padding(du.cast_to_int(contexts), FLAGS.max_document_size)
