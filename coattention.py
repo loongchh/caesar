@@ -148,7 +148,7 @@ class CoattentionModel():
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
-        if FLAGS.max_summary_size != FLAGS.max_document_size:
+        if FLAGS.max_summary_size < FLAGS.max_document_size:
             if FLAGS.model.lower() == "max":
                 q_sen = tf.reduce_max(Q, axis=1)
             elif FLAGS.model.lower() == "mean":
