@@ -28,7 +28,7 @@ def train_epoch(train_data, model, session, losses, grad_norms):
         losses.append(loss)
         for j,grad in enumerate(grad_norm):
             grad_norms[j].append(grad)
-        prog.update(i+1, [("grad_norm",np.sum(grad_norm)), ("train loss", loss)])
+        prog.update(i+1, [("grad_norm",np.sum(grad_norm)), ("loss", loss)])
     print ""
     return grad_norms, losses
 
@@ -153,7 +153,7 @@ def train():
                 logger.info(EMs)
                 # Checkpoint model
                 if f1 == max(F1s):
-                    logger.info("New best model created! Saving...")
+                    logger.info("New best model! Saving...")
                     checkpoint_model(session, run_id)
 
             make_training_plots(losses, grad_norms, F1s, EMs, run_id)
