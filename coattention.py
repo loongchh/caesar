@@ -173,7 +173,6 @@ class CoattentionModel():
             Q = tf.scan(lambda a, x: tf.matmul(x, W_q), Q)
             Q = tf.tanh(Q +  b_q)
 
-
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
         return (Q, D)
@@ -212,7 +211,7 @@ class CoattentionModel():
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32, \
                 sequence_length=self.document_seq_placeholder)
-            U = tf.concat(2,U)
+            U = tf.concat(2, U)
         
         assert_shape(U, "U", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
         return U
