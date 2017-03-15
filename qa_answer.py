@@ -120,8 +120,11 @@ def main(_):
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
     contexts, questions, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
+    questions=questions[:100]
+    contexts=contexts[:100]
 
     questions = [qa_data.basic_tokenizer(records) for records in questions]
+
     contexts = [qa_data.basic_tokenizer(records) for records in contexts]
 
     questions, questions_mask, questions_seq = du.padding(du.cast_to_int(questions), FLAGS.max_question_size)
