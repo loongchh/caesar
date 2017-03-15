@@ -91,8 +91,8 @@ class CoattentionModel():
         for sen in range(n_sentence):
             idx_from = tf.document_sentence_placeholder(x, 0)  # sentence begin in document
             idx_to = tf.document_sentence_placeholder(x, 1)  # sentence end in document
-            sentences.append(D[x, idx_from:idx_to, :])
-            sen_len.append(idx_to - idx_from + 1)
+            sentences.append(D[x, idx_from:(idx_to + 1), :])
+            sen_len.append(idx_to + 1 - idx_from)
             
             # Sentence-level representation
             rep = tf.reduce_max(sentences[-1], axis=0) if FLAGS.model.lower() == "max" \
@@ -111,8 +111,11 @@ class CoattentionModel():
 
         # Reorder sentence in document, then truncate doc to the maximum summary length
         (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
+        if idx_to < FLAGS.max_document_size - 1  # if padding in document
+            sen_sim_sorted.append(D[x, (idx_to + 1):, :])
+        D_summary = tf.concat(sen_sim_sorted, axis=0)
         assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
-        D_summary = tf.concat(sen_sim_sorted, axis=0)[:FLAGS.max_summary_size, :]
+        D_summary = D_summary[:FLAGS.max_summary_size, :]
         assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
 
         # Update answer span in the to the index in summary
