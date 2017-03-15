@@ -73,8 +73,7 @@ def load_dataset(type='train', plot=False, debug=False):
 
     # Assert data length
     assert len(questions) == len(contexts) and len(contexts) == len(spans)
-    if debug:
-        logger.debug("Loaded {} data of size {}.".format(type, len(questions)))
+    logger.info("Loaded {} dataset of size {}.".format(type, len(questions)))
 
     # cast the data from string to int
     questions = cast_to_int(questions)

@@ -37,7 +37,7 @@ class CoattentionModel():
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
         self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
                                                             name="document_sentence_placeholder")
-        self.span_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+        self.span_sentence_placeholder = tf.placeholder(tf.int32, shape=(None),
                                                         name="span_sentence_placeholder")
         self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")

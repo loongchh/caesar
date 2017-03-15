@@ -79,7 +79,7 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
 
 
 def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
-    logger.info("=============== Dev set evaluation ===============")
+    logger.info("=============== Evaluation ===============")
     f1_sum = 0
     em_sum = 0
     batch_size = FLAGS.batch_size
@@ -117,7 +117,6 @@ def train():
     val_data = load_dataset(type="val")
 
     with tf.Graph().as_default():
-
         logger.info("Building model...",)
         start = time.time()
         model = choose_model(embeddings=embeddings)
