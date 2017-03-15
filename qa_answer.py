@@ -11,10 +11,10 @@ import logging
 from tqdm import tqdm
 import tensorflow as tf
 
-from code.preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url,tokenize
-import code.qa_data
-import code.qa_data_util as du
-from  code.parse_args import parse_args
+from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url,tokenize
+import qa_data
+import qa_data_util as du
+from  parse_args import parse_args
 
 logging.basicConfig(level=logging.INFO)
 
