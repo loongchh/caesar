@@ -155,6 +155,7 @@ def main(_):
         # # write to json file to root dir
         # with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
         #     f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+	print (answers)
 
 
 if __name__ == "__main__":
