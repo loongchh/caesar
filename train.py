@@ -246,12 +246,12 @@ def debug_shape():
         init = tf.global_variables_initializer()
         log_total_parametes()
 
-        # with tf.Session() as session:
-        #     session.run(init)
-        #     model.debug_shape(
-        #         session,
-        #         data_batch=du.get_batch(val_data,0)
-        #     )
+        with tf.Session() as session:
+            session.run(init)
+            model.debug_shape(
+                session,
+                data_batch=du.get_batch(val_data,0)
+            )
     logger.info("")
 
 

@@ -104,7 +104,10 @@ class CoattentionModel():
                                   dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
             b_q = tf.get_variable("b_q", shape=(FLAGS.state_size),
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
-            Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
+            # Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
+            Q = tf.scan(lambda a, x: tf.matmul(x, W_q), Q)
+            Q = tf.tanh(Q +  b_q)
+
 
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
@@ -170,14 +173,16 @@ class CoattentionModel():
                                  dtype=tf.float32,
                                  initializer=tf.constant_initializer(0.0)
                                  )
-            h = tf.transpose(tf.einsum('ijk,kl->ijl', Hr, W1) + b1, perm = [0,2,1])
+
+            Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2*FLAGS.state_size]), W1)
+            Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_document_size, 2])
+            h = tf.transpose(Hr_W1 + b1, perm = [0,2,1])
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas,2)
 
             answer_pointer_rep = (betas, pred)
 
         return answer_pointer_rep
-
     ## ==============================
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
@@ -347,17 +352,17 @@ class CoattentionModel():
     def debug_shape(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
 
-        train_op_output = sess.run(
-            fetches = util.tuple_to_list(*self.train_op),
+        debug_output = sess.run(
+            fetches = util.tuple_to_list(*self.decoded),
             feed_dict=feed
         )
-        logger.info("grads: {}".format(train_op_output[1]))
-        logger.info("loss: {}".format(train_op_output[2]))
-        # logger.info("pred: {}".format(train_op_output[4]))
-
-        # for i, tensor in enumerate(self.train_op):
-        #     if tensor.name.startswith("debug_"):
-        #         logger.debug("Shape of {} == {}".format(tensor.name[6:], train_op_output[i]))
+        # logger.info("grads: {}".format(train_op_output[1]))
+        # logger.info("loss: {}".format(train_op_output[2]))
+        # # logger.info("pred: {}".format(train_op_output[4]))
+        # logger.info(debug_output)
+        for i, tensor in enumerate(self.decoded):
+            if tensor.name.startswith("debug_"):
+                logger.debug("Shape of {} == {}".format(tensor.name[6:], debug_output[i]))
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
