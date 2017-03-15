@@ -35,10 +35,8 @@ class CoattentionModel():
         self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
-        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size, 2),
+        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
                                                             name="document_sentence_placeholder")
-        self.document_n_sentence_placeholder = tf.placeholder(tf.int32, shape=(None), 
-                                                              name="document_n_sentence_placeholder")
         self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 3),
                                                name="span_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
@@ -83,15 +81,18 @@ class CoattentionModel():
         return question_embeddings, document_embeddings
 
     def summarize(self, x, D, q_sen):
-        n_sentence = self.document_n_sentence_placeholder[x]  # number of sentences in document
+        n_sentence = 0  # number of sentences in document
         sentences = []
         sen_len = []
         sen_rep = []
 
-        for sen in range(n_sentence):
-            idx_from = tf.document_sentence_placeholder(x, 0)  # sentence begin in document
-            idx_to = tf.document_sentence_placeholder(x, 1)  # sentence end in document
-            sentences.append(D[x, idx_from:(idx_to + 1), :])
+        for sen in range(FLAGS.max_document_size):
+            idx_from = tf.document_sentence_placeholder(x)  # sentence begin word index in document
+            idx_to = tf.document_sentence_placeholder(x + 1)  # sentence end word index in document
+            if idx_to < 0:
+                break
+
+            sentences.append(D[x, idx_from:idx_to, :])
             sen_len.append(idx_to + 1 - idx_from)
             
             # Sentence-level representation
@@ -111,8 +112,8 @@ class CoattentionModel():
 
         # Reorder sentence in document, then truncate doc to the maximum summary length
         (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
-        if idx_to < FLAGS.max_document_size - 1  # if padding in document
-            sen_sim_sorted.append(D[x, (idx_to + 1):, :])
+        if idx_from < FLAGS.max_document_size  # if padding in document
+            sen_sim_sorted.append(D[x, idx_from:, :])
         D_summary = tf.concat(sen_sim_sorted, axis=0)
         assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
         D_summary = D_summary[:FLAGS.max_summary_size, :]
