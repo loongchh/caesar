@@ -82,7 +82,7 @@ class CoattentionModel():
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
 
-    def truncate_document(self, x, D, q_sen):
+    def summarize(self, x, D, q_sen):
         n_sentence = self.document_n_sentence_placeholder[x]  # number of sentences in document
         sentences = []
         sen_len = []
@@ -111,16 +111,18 @@ class CoattentionModel():
 
         # Reorder sentence in document, then truncate doc to the maximum summary length
         (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
+        assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
         D_summary = tf.concat(sen_sim_sorted, axis=0)[:FLAGS.max_summary_size, :]
+        assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
 
         # Update answer span in the to the index in summary
         # NOTE: If the answer is not located in a sentence in the summary, then the 
         #       eventual calculatd span would be larger than FLAGS.max_summary_size and 
         #       produce NaN when calculating cross entropy. This is remedied by ignoring 
         #       NaN values when averaging the loss.
-        ans_loc_in_sen = np.argmax(sen_sim_idx == self.span_placeholder[x, 2])
-        len_b4_document = sum(sen_len[:ans_loc_in_sen])
-        len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_loc_in_sen))
+        ans_sen_order = np.argmax(sen_sim_idx == self.span_placeholder[x, 2])
+        len_b4_document = sum(sen_len[:ans_sen_order])
+        len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_sen_order))
         self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
         self.span_placeholder[x, 1] += len_b4_summary - len_b4_document
 
@@ -150,7 +152,7 @@ class CoattentionModel():
                 q_sen = None
 
             assert_shape(q_sen, "Q_sen", [None, FLAGS.state_size])
-            D = tf.map_fn(lambda x: self.truncate_document(x, D, q_sen), range(len(D.shape[0])), dtype=tf.float32)
+            D = tf.map_fn(lambda x: self.summarize(x, D, q_sen), range(len(D.shape[0])), dtype=tf.float32)
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
