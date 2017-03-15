@@ -81,10 +81,10 @@ class CoattentionModel():
         return question_embeddings, document_embeddings
 
     def summarize(self, x, D, q_sen):
-        n_sentence = 0  # number of sentences in document
         sentences = []
         sen_len = []
         sen_rep = []
+        n_sentence = 0  # number of sentences in document
 
         for sen in range(FLAGS.max_document_size):
             idx_from = tf.document_sentence_placeholder(x)  # sentence begin word index in document
@@ -94,6 +94,7 @@ class CoattentionModel():
 
             sentences.append(D[x, idx_from:idx_to, :])
             sen_len.append(idx_to + 1 - idx_from)
+            n_sentence += 1
             
             # Sentence-level representation
             rep = tf.reduce_max(sentences[-1], axis=0) if FLAGS.model.lower() == "max" \
@@ -111,10 +112,11 @@ class CoattentionModel():
         sen_sim = tf.matmul(q_sen[x, :], tf.transpose(sen_rep))
 
         # Reorder sentence in document, then truncate doc to the maximum summary length
-        (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
+        (_, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
+        sen_sorted = [sentences[i] for i in sen_sim_idx]
         # if idx_from < FLAGS.max_document_size:
-        sen_sim_sorted.append(D[x, idx_from:, :])  # Non-empty if padding is in document
-        D_summary = tf.concat(0, sen_sim_sorted)
+        sen_sorted.append(D[x, idx_from:, :])  # Non-empty if padding is in document
+        D_summary = tf.concat(0, sen_sorted)
         assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
         D_summary = D_summary[:FLAGS.max_summary_size, :]
         assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
