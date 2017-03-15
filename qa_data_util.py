@@ -51,7 +51,7 @@ def load_embeddings():
     embeddings=embeddings.astype(np.float32)
 
     zeros = np.sum([1 for x in embeddings if np.all(x==0)])
-    logger.info("Loaded GloVe embeddings of {} vocabs with {} zero vector".format(len(embeddings), zeros))
+    logger.info("Loaded GloVe embeddings of {} vocabs with {} zero vectors.".format(len(embeddings), zeros))
 
     return embeddings
 
