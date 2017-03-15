@@ -2,6 +2,8 @@ import logging
 import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
+from datetime import datetime
+import os
 
 import parse_args
 FLAGS = tf.app.flags.FLAGS
@@ -10,6 +12,39 @@ FLAGS = tf.app.flags.FLAGS
 logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
+
+
+def choose_model(embeddings, debug_shape=False):
+    if FLAGS.model.lower() == "match_lstm":
+        from match_lstm import MatchLstmModel
+        model = MatchLstmModel(embeddings, debug_shape)
+    elif FLAGS.model.lower() == "match_lstm_boundry":
+        from match_lstm_boundry import MatchLstmBoundryModel
+        model = MatchLstmBoundryModel(embeddings, debug_shape)
+    elif FLAGS.model.lower() == "coattention":
+        from coattention import CoattentionModel
+        model = CoattentionModel(embeddings, debug_shape)
+    else:
+        model = None
+
+    return model
+
+
+def checkpoint_model(session,run_id, version=1):
+    saver = tf.train.Saver()
+    save_dir = pjoin(FLAGS.train_dir, FLAGS.model, run_id)
+    if not os.path.exists(save_dir):
+        os.makedirs(save_dir)
+    save_path = saver.save(session,pjoin(save_dir, "model-{}.ckpt".format(version)))
+    logger.info("Model saved in file: %s" % save_path)
+
+
+def restore_model(session, run_id, version=1):
+    saver = tf.train.Saver()
+    save_path = pjoin(FLAGS.train_dir, FLAGS.model, run_id, "model-{}.ckpt".format(version))
+    saver.restore(session, save_path)
+    logger.info("Model restored from file: {}".format(save_path))
+
 
 def load_embeddings():
     embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
@@ -121,9 +156,18 @@ def get_answer_from_span(spans):
 
 
 def padding(data, max_length, zero_vector=0):
+
+    # clip records to max length
+    data = [record[:max_length] for record in data]
+
+    # sequence length vector
     seq = [len(record) for record in data]
-    mask = [min(len(record), max_length)*[True] + (max_length - len(record))*[False] for record in data]
-    data = [record[:max_length] + (max_length - len(record))*[zero_vector] for record in data]
+
+    # Masking vectors
+    mask = [len(record)*[True] + (max_length - len(record))*[False] for record in data]
+
+    # padded data
+    data = [record[:] + (max_length - len(record))*[zero_vector] for record in data]
 
     return data, mask,seq
 

@@ -17,21 +17,6 @@ logger = logging.getLogger("hw4")
 logger.setLevel(logging.DEBUG)
 logging.basicConfig(format='%(levelname)s:%(message)s', level=logging.DEBUG)
 
-def choose_model(embeddings, debug_shape=False):
-    if FLAGS.model.lower() == "match_lstm":
-        from match_lstm import MatchLstmModel
-        model = MatchLstmModel(embeddings, debug_shape)
-    elif FLAGS.model.lower() == "match_lstm_boundry":
-        from match_lstm_boundry import MatchLstmBoundryModel
-        model = MatchLstmBoundryModel(embeddings, debug_shape)
-    elif FLAGS.model.lower() == "coattention":
-        from coattention import CoattentionModel
-        model = CoattentionModel(embeddings, debug_shape)
-    else:
-        model = None
-
-    return model
-
 
 def train_epoch(train_data, model, session, losses, grad_norms):
     num_train_batches = int(len(train_data['q'])/FLAGS.batch_size)
@@ -49,30 +34,6 @@ def train_epoch(train_data, model, session, losses, grad_norms):
     print ""
     return grad_norms, losses
 
-
-# def evaluate_single(document, question, ground_truth_span, predicted_span, rev_vocab):
-#         f1 = 0
-#         em = False
-#
-#         ## Reverse the indices if start is greater than end, SHOULDN'T Happen
-#         if predicted_span[0] > predicted_span[1]:
-#             a = predicted_span[0]
-#             predicted_span[0]=predicted_span[1]
-#             predicted_span[1] = a
-#
-#         ground_truth_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-#                                 if int(ground_truth_span[0]) <= int(index) <= int(ground_truth_span[1])]
-#
-#         predicted_tokens = [rev_vocab[int(token_id)] for index, token_id in enumerate(document)
-#                                 if int(predicted_span[0]) <= int(index) <= int(predicted_span[1])]
-#
-#         predicted = " ".join(predicted_tokens)
-#         ground_truth = " ".join(ground_truth_tokens)
-#         if em:
-#             print predicted, document, question
-#         f1 = evaluate.f1_score(predicted, ground_truth)
-#         em = evaluate.exact_match_score(predicted, ground_truth)
-#         return f1, em
 
 def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_text):
         f1 = 0
@@ -149,21 +110,21 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
 
 
 def train():
-    logger.info("----------------Training model-----------------------------")
+    run_id = str(datetime.now()).split(".")[0].replace(' ','-').replace(':','-')
+    logger.info("----------------Training model- {} -----------------------------".format(run_id))
     vocab,rev_vocab = du.initialize_vocab()
 
     embeddings = du.load_embeddings()
-    train_data = du.load_dataset(type = "train")
-    val_data = du.load_dataset(type = "val")
+    train_data = du.load_dataset(type="train")
+    val_data = du.load_dataset(type="val")
 
     with tf.Graph().as_default():
 
         logger.info("Building model...",)
         start = time.time()
-        model = choose_model(embeddings=embeddings, debug_shape=True)
+        model = du.choose_model(embeddings=embeddings)
         logger.info("took %.2f seconds", time.time() - start)
         init = tf.global_variables_initializer()
-        saver = None
 
         with tf.Session() as session:
             # TODO: Play more with TFDG Debugger
@@ -191,12 +152,13 @@ def train():
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
                 F1s.append(f1)
                 EMs.append(em)
-                # TODO: Checkpoint model
-
                 logger.info(F1s)
                 logger.info(EMs)
+                # Checkpoint model
+                if f1 == max(F1s):
+                    du.checkpoint_model(session, run_id)
 
-            make_training_plots(losses, grad_norms, F1s, EMs)
+            make_training_plots(losses, grad_norms, F1s, EMs, run_id)
 
             # train_writer.close()
 
@@ -205,14 +167,14 @@ def train():
     logger.info(FLAGS.comment)
 
 
-def make_training_plots(losses, grad_norms, F1s, EMs):
+def make_training_plots(losses, grad_norms, F1s, EMs, run_id):
     try:
         import matplotlib
         matplotlib.use('Agg')
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_pdf import PdfPages
         now = datetime.utcnow()
-        with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, now)) as pdf:
+        with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, run_id)) as pdf:
             plt.clf()
             # -----------------------
             F1s = np.array(F1s)
@@ -278,7 +240,7 @@ def debug_shape():
 
         logger.info("Building model for Debugging Shape...")
         start = time.time()
-        model = choose_model(embeddings=embeddings, debug_shape=True)
+        model = du.choose_model(embeddings=embeddings, debug_shape=True)
         logger.info("took %.2f seconds", time.time() - start)
 
         init = tf.global_variables_initializer()

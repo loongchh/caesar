@@ -24,25 +24,25 @@ class CoattentionModel():
         self.build(debug_shape)
 
     def add_placeholders(self):
-        self.question_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_question_size),
+        self.question_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_question_size),
                                                    name="question_placeholder")
-        self.question_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_question_size),
+        self.question_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_question_size),
                                                         name="question_mask_placeholder")
-        self.question_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size),
+        self.question_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
                                                        name="question_seq_placeholder")
-        self.document_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_document_size),
+        self.document_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size),
                                                    name="document_placeholder")
-        self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_document_size),
+        self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
-        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size),
+        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
                                                        name="document_seq_placeholder")
-        self.span_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, 2),
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")
-        self.answer_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+        self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
                                                  name="answer_placeholder")
-        self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(FLAGS.batch_size, FLAGS.max_answer_size),
+        self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_answer_size),
                                                       name="answer_mask_placeholder")
-        self.answer_seq_placeholder = tf.placeholder(tf.int32, shape=(FLAGS.batch_size, ),
+        self.answer_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
                                                      name="answer_seq_placeholder")
         self.dropout_placeholder = tf.placeholder(tf.float32, name="dropout_placeholder")
 
@@ -58,13 +58,13 @@ class CoattentionModel():
 
         if dropout is not None:
             feed_dict[self.dropout_placeholder] = dropout
-        if data_batch['s'] is not None:
+        if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
-        if data_batch['a'] is not None:
+        if 'a' in data_batch and data_batch['a'] is not None:
             feed_dict[self.answer_placeholder] = data_batch['a']
-        if data_batch['a_m'] is not None:
+        if 'a_m' in data_batch and data_batch['a_m'] is not None:
             feed_dict[self.answer_mask_placeholder] = data_batch['a_m']
-        if data_batch['a_s'] is not None:
+        if 'a_s' in data_batch and data_batch['a_s'] is not None:
             feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
 
         return feed_dict
@@ -74,8 +74,8 @@ class CoattentionModel():
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
 
-        # assert_shape(question_embeddings, "question_embeddings", [FLAGS.batch_size, FLAGS.max_question_size, None])
-        # assert_shape(document_embeddings, "document_embeddings", [FLAGS.batch_size, FLAGS.max_document_size, None])
+        # assert_shape(question_embeddings, "question_embeddings", [None, FLAGS.max_question_size, None])
+        # assert_shape(document_embeddings, "document_embeddings", [None, FLAGS.max_document_size, None])
 
         return question_embeddings, document_embeddings
 
@@ -91,8 +91,8 @@ class CoattentionModel():
             tf.get_variable_scope().reuse_variables()
             (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
         
-        assert_shape(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
-        assert_shape(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
+        assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
         # Add sentinel to the end of document/question.
         # Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
@@ -106,8 +106,8 @@ class CoattentionModel():
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
             Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
 
-        assert_shape(Q, "Q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
-        assert_shape(D, "D", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.state_size])
+        assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
         return (Q, D)
 
     ## ==============================
@@ -118,35 +118,35 @@ class CoattentionModel():
 
         # Affinity matrix.
         L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
-        assert_shape(L, "L", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.max_document_size])
+        assert_shape(L, "L", [None, FLAGS.max_question_size, FLAGS.max_document_size])
 
         # Normalize with respect to question/document.
         A_q = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
-        assert_shape(A_q, "A_q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.max_document_size])
+        assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_document_size])
         A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
-        assert_shape(A_d, "A_d", [FLAGS.batch_size, FLAGS.max_document_size, FLAGS.max_question_size])
+        assert_shape(A_d, "A_d", [None, FLAGS.max_document_size, FLAGS.max_question_size])
 
         # Attention of the document w.r.t question.
         C_q = tf.batch_matmul(A_q, D)
-        assert_shape(C_q, "C_q", [FLAGS.batch_size, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(C_q, "C_q", [None, FLAGS.max_question_size, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
-        C_d = tf.concat_v2([tf.batch_matmul(A_d, Q), tf.batch_matmul(A_d, C_q)], 2)
-        assert_shape(C_d, "C_d", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+        C_d = tf.concat(2, [tf.batch_matmul(A_d, Q), tf.batch_matmul(A_d, C_q)])
+        assert_shape(C_d, "C_d", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
         # Fusion of temporal information to the coattention context
         with tf.variable_scope("COATTENTION"):
-            coatt = tf.concat_v2([D, C_d], 2)
-            assert_shape(coatt, "coatt", [FLAGS.batch_size, FLAGS.max_document_size, 3 * FLAGS.state_size])
+            coatt = tf.concat(2, [D, C_d])
+            assert_shape(coatt, "coatt", [None, FLAGS.max_document_size, 3 * FLAGS.state_size])
             
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32, \
                 sequence_length=self.document_seq_placeholder)
-            U = tf.concat_v2(U, 2)
+            U = tf.concat(2,U)
         
-        assert_shape(U, "U", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+        assert_shape(U, "U", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
         return U
 
 
@@ -182,7 +182,7 @@ class CoattentionModel():
     ## DYNAMIC POINTING DECODER
     def decode(self, coattention, debug_shape=False):
         H_r = coattention
-        assert_shape(H_r, "H_r", [FLAGS.batch_size, FLAGS.max_document_size, 2 * FLAGS.state_size])
+        assert_shape(H_r, "H_r", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope("ANSWER_POINTER"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
@@ -224,7 +224,7 @@ class CoattentionModel():
                 beta.append(beta_k)
                 (_, ha) = cell(H_rbeta_k, ha)
 
-            beta = tf.concat_v2(beta, 1)
+            beta = tf.concat(1,beta)
             assert_shape(beta, "beta", [FLAGS.batch_size, 2, FLAGS.max_document_size])
         return (beta, tf.argmax(beta, axis=2))
 
@@ -339,7 +339,7 @@ class CoattentionModel():
         self.add_placeholders()
         self.preprocessed = self.preprocessing(debug_shape)
         self.encoded = self.encode(self.preprocessed, debug_shape)
-        self.decoded = self.decode(self.encoded, debug_shape)
+        # self.decoded = self.decode(self.encoded, debug_shape)
         self.decoded = self.add_feed_forward_op(self.encoded, debug_shape)
         self.lost = self.loss(self.decoded, debug_shape)
         self.train_op = self.add_training_op(self.lost, debug_shape)

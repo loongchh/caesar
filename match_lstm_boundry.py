@@ -75,16 +75,13 @@ class MatchLstmBoundryModel():
 
         if dropout is not None:
             feed_dict[self.dropout_placeholder] = dropout
-        if data_batch['s'] is not None:
+        if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
-
-        if data_batch['a'] is not None:
+        if 'a' in data_batch and data_batch['a'] is not None:
             feed_dict[self.answer_placeholder] = data_batch['a']
-
-        if data_batch['a_m'] is not None:
+        if 'a_m' in data_batch and data_batch['a_m'] is not None:
             feed_dict[self.answer_mask_placeholder] = data_batch['a_m']
-
-        if data_batch['a_s'] is not None:
+        if 'a_s' in data_batch and data_batch['a_s'] is not None:
             feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
 
         return feed_dict
