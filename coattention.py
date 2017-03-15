@@ -89,7 +89,7 @@ class CoattentionModel():
         for sen in range(FLAGS.max_document_size):
             idx_from = tf.document_sentence_placeholder(x)  # sentence begin word index in document
             idx_to = tf.document_sentence_placeholder(x + 1)  # sentence end word index in document
-            if idx_to < 0:
+            if idx_to < 0: # This is no longer a sentence
                 break
 
             sentences.append(D[x, idx_from:idx_to, :])
@@ -112,9 +112,9 @@ class CoattentionModel():
 
         # Reorder sentence in document, then truncate doc to the maximum summary length
         (sen_sim_sorted, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
-        if idx_from < FLAGS.max_document_size  # if padding in document
-            sen_sim_sorted.append(D[x, idx_from:, :])
-        D_summary = tf.concat(sen_sim_sorted, axis=0)
+        # if idx_from < FLAGS.max_document_size:
+        sen_sim_sorted.append(D[x, idx_from:, :])  # Non-empty if padding is in document
+        D_summary = tf.concat(0, sen_sim_sorted)
         assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
         D_summary = D_summary[:FLAGS.max_summary_size, :]
         assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
