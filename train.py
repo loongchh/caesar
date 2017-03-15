@@ -98,8 +98,8 @@ def evaluate_single(document, ground_truth, predicted, rev_vocab, print_answer_t
 
 
 def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
-    f1_sum = 0.
-    em_sum = 0.
+    f1_sum_batch = 0.
+    em_sum_batch = 0.
     for i in range(len(data_batch['q'])):
         q = data_batch['q']
         c = data_batch['c'][i]
@@ -113,11 +113,10 @@ def evaluate_batch(data_batch, predicted_batch, rev_vocab, print_answer_text):
             rev_vocab=rev_vocab,
             print_answer_text=print_answer_text and (i % 5 ==1)
         )
-        f1_sum += f1
-        em_sum += 1. if em else 0.
+        f1_sum_batch += f1
+        em_sum_batch += 1. if em else 0.
 
-
-    return f1_sum/len(predicted_batch), em_sum
+    return f1_sum_batch, em_sum_batch
 
 
 def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
@@ -135,18 +134,19 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
             break
         data_batch = du.get_batch(val_data, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
-        f1, em = evaluate_batch(
+        f1_sum_batch, em_sum_batch = evaluate_batch(
             data_batch=data_batch,
             predicted_batch=pred,
             rev_vocab=rev_vocab,
             print_answer_text=(print_answer_text)
         )
-        f1_sum += f1
-        em_sum += em
+        f1_sum += f1_sum_batch
+        em_sum += em_sum_batch
         # prog.update(i+1, [("Avg F1", f1)])
     print ""
-    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/batch_size, em_sum, data_size))
-    return f1_sum/batch_size, em_sum
+    logger.info("Evaluation: Avg F1 Score: {}. Total EM Score: {} out of {}".format(f1_sum/data_size, em_sum, data_size))
+    return f1_sum/data_size, em_sum
+
 
 def train():
     logger.info("----------------Training model-----------------------------")
