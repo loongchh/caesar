@@ -19,13 +19,11 @@ def parse_args():
     tf.app.flags.DEFINE_integer("max_question_size", 25, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
     tf.app.flags.DEFINE_integer("max_answer_size", 6, "")
-    # tf.app.flags.DEFINE_integer("output_size", 750, "The output size of your model.")
 
     # Model Specific Parameters
     # Coattention
-    tf.app.flags.DEFINE_integer("coattention_pooling_size",11, "")
-    tf.app.flags.DEFINE_integer("maxout_size", 32, "Size of maxout in Highway Maxout Network.")
-    tf.app.flags.DEFINE_integer("max_decode_steps", 4, "Size of decoding steps.")
+    tf.app.flags.DEFINE_integer("summary_size", 300, "Truncate the document to specific length.")
+    tf.app.flags.DEFINE_string("pool", "max", "Pooling mechanism used to summarize each sentence.")
 
     # Directories
     tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")

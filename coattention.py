@@ -36,6 +36,8 @@ class CoattentionModel():
                                                         name="document_mask_placeholder")
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
                                                        name="document_seq_placeholder")
+        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size),
+                                                            name="document_sentence_placeholder")
         self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
@@ -58,6 +60,8 @@ class CoattentionModel():
 
         if dropout is not None:
             feed_dict[self.dropout_placeholder] = dropout
+        if 'd_s' in data_batch and data_batch['d_s'] is not None:
+            feed_dict[self.document_sentence_placeholder] = data_batch['d_s']
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
         if 'a' in data_batch and data_batch['a'] is not None:
@@ -73,11 +77,14 @@ class CoattentionModel():
         all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=False)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
-
-        # assert_shape(question_embeddings, "question_embeddings", [None, FLAGS.max_question_size, None])
-        # assert_shape(document_embeddings, "document_embeddings", [None, FLAGS.max_document_size, None])
-
         return question_embeddings, document_embeddings
+
+    def truncate_document(self, x, D):
+        max_sentence = tf.reduce_max(self.document_sentence_placeholder[x, :]) + 1
+
+        for sen in range(max_sentence):
+            indices = tf.squeeze(tf.where(tf.equal(self.document_sentence_placeholder[x, :], sen)), squeeze_dims=1)
+            
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
@@ -94,9 +101,16 @@ class CoattentionModel():
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
-        # Add sentinel to the end of document/question.
-        # Q = tf.concat_v2([Q, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
-        # D = tf.concat_v2([D, tf.zeros([FLAGS.batch_size, 1, FLAGS.state_size])], 1)
+        if FLAGS.summary_size != FLAGS.max_document_size:
+            if FLAGS.model.lower() == "max":
+                Q_sen = tf.reduce_max(Q, axis=1)
+            elif FLAGS.model.lower() == "max":
+                Q_sen = tf.reduce_max(Q, axis=1)
+            else:
+                Q_sen = None
+
+            assert_shape(Q_sen, "Q_sen", [None, FLAGS.state_size])
+            D = tf.map_fn(lambda x: self.truncate_document(x, D), range(len(D.shape[0])), dtype=tf.float32)
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -152,13 +166,9 @@ class CoattentionModel():
         assert_shape(U, "U", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
         return U
 
-
-
-    ####################################################
-    ##### Simple Feed Forward Prediction Layer #########
-    ####################################################
-
-    def add_feed_forward_op(self, coattention, debug_shape=False):
+    ## ==============================
+    ## FEED FORWARD DECODER
+    def feed_forward_decode(self, coattention, debug_shape=False):
         Hr = coattention
         with tf.variable_scope("Feed_Forward_Prediction"):
             W1 =tf.get_variable(name='W1',
@@ -174,18 +184,20 @@ class CoattentionModel():
                                  initializer=tf.constant_initializer(0.0)
                                  )
 
-            Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2*FLAGS.state_size]), W1)
+            Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2 * FLAGS.state_size]), W1)
             Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_document_size, 2])
             h = tf.transpose(Hr_W1 + b1, perm = [0,2,1])
             betas = tf.nn.softmax(h)
-            pred = tf.argmax(betas,2)
+            pred = tf.argmax(betas, 2)
 
             answer_pointer_rep = (betas, pred)
 
         return answer_pointer_rep
+
+    
     ## ==============================
-    ## DYNAMIC POINTING DECODER
-    def decode(self, coattention, debug_shape=False):
+    ## ANSWER POINTER DECODER
+    def answer_pointer(self, coattention, debug_shape=False):
         H_r = coattention
         assert_shape(H_r, "H_r", [None, FLAGS.max_document_size, 2 * FLAGS.state_size])
 
@@ -233,95 +245,12 @@ class CoattentionModel():
             assert_shape(beta, "beta", [FLAGS.batch_size, 2, FLAGS.max_document_size])
         return (beta, tf.argmax(beta, axis=2))
 
-        # U = tf.transpose(coattention, [1, 0, 2])
-        # assert_shape(U, "U", [FLAGS.max_document_size, FLAGS.batch_size, 2 * FLAGS.state_size])
-
-        # LSTM_dec = tf.nn.rnn_cell.BasicLSTMCell(FLAGS.state_size)
-        # h = LSTM_dec.zero_state(FLAGS.state_size, dtype=tf.float32)
-        # HMN_a = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
-        # HMN_b = highway_maxout(FLAGS.state_size, FLAGS.maxout_size)
-
-        # batch_index = tf.to_int32(list(range(FLAGS.batch_size)))
-        # def tf_slice(pos, idx):
-        #     return tf.reshape(tf.gather(tf.gather(U, idx), tf.gather(pos, idx)), [-1])
-
-        # # Get first estimated locations
-        # s = [0] * FLAGS.batch_size
-        # e = self.document_seq_placeholder
-        # # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-        # # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-        # u_s = tf.map_fn(lambda i: tf_slice(s, i), batch_index, dtype=tf.float32)
-        # u_e = tf.map_fn(lambda i: tf_slice(e, i), batch_index, dtype=tf.float32)
-        # assert_shape(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
-        # assert_shape(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
-
-        # with tf.variable_scope('DECODER'):
-        #     alpha = []
-        #     beta = []
-
-        #     for step in range(FLAGS.max_decode_steps):
-        #         if step > 0:
-        #             tf.get_variable_scope().reuse_variables()
-                
-        #         # The dynamic decoder is a state machine
-        #         (_, state) = tf.nn.rnn(LSTM_dec, [tf.concat_v2([u_s, u_e], 1)], dtype=tf.float32)
-        #         h = tf.concat(1, state)
-        #         # (_, h) = LSTM_dec(tf.concat_v2([u_s, u_e], 1), h)
-        #         # assert_shape(h, "h", [FLAGS.state_size])
-
-        #         with tf.variable_scope('HIGHWAY-A'):
-        #             # Start score corresponding to each word in document
-        #             a = tf.map_fn(lambda u_t: HMN_a(u_t, h, u_s, u_e), U)
-
-        #             # Update current start position
-        #             new_s = tf.reshape(tf.argmax(a, 0), [FLAGS.batch_size])
-        #             assert_shape(new_s, "new_s", [FLAGS.batch_size])
-        #             # u_s = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), s)))
-        #             u_s = tf.map_fn(lambda i: tf_slice(new_s, i), batch_index, dtype=tf.float32)
-        #             assert_shape(u_s, "u_s", [FLAGS.batch_size, 2 * FLAGS.state_size])
-
-        #         with tf.variable_scope('HIGHWAY-B'):
-        #             # End score corresponding to each word in document
-        #             b = tf.map_fn(lambda u_t: HMN_b(u_t, h, u_s, u_e), U)
-
-        #             # Update current end position
-        #             new_e = tf.reshape(tf.argmax(b, 0), [FLAGS.batch_size])
-        #             assert_shape(new_e, "new_e", [FLAGS.batch_size])
-        #             # u_e = tf.gather_nd(U, list(zip(range(FLAGS.batch_size), e)))
-        #             u_e = tf.map_fn(lambda i: tf_slice(new_e, i), batch_index, dtype=tf.float32)
-        #             assert_shape(u_e, "u_e", [FLAGS.batch_size, 2 * FLAGS.state_size])
-
-        #         a = tf.reshape(a, [FLAGS.batch_size, FLAGS.max_document_size])
-        #         b = tf.reshape(b, [FLAGS.batch_size, FLAGS.max_document_size])
-        #         alpha.append(a)
-        #         beta.append(b)
-
-        #         if s == new_s and e == new_e:
-        #             break
-                
-        #         s = new_s
-        #         e = new_e
-
-        # return ((alpha, beta), (s, e))
-
     def loss(self, decoded, debug_shape=False):
         beta = decoded[0]
         y = self.span_placeholder
         L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], y[:, 0]))
         L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], y[:, 1]))
         return (L1 + L2) / 2.0
-        # alpha = decoded[0][0]
-        # beta = decoded[0][1]
-        # assert_shape(alpha[0], "alpha[0]", [FLAGS.batch_size, FLAGS.max_document_size])
-        # assert_shape(beta[0], "beta[0]", [FLAGS.batch_size, FLAGS.max_document_size])
-        # label_a = tf.reshape(self.span_placeholder[:, 0], [FLAGS.batch_size])
-        # label_b = tf.reshape(self.span_placeholder[:, 1], [FLAGS.batch_size])
-
-        # La = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(a, label_a))
-        #                     for a in alpha])
-        # Lb = tf.reduce_sum([tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(b, label_b))
-        #                     for b in beta])
-        # return (La + Lb) / 2
 
     def add_training_op(self, loss, debug_shape=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
@@ -344,8 +273,8 @@ class CoattentionModel():
         self.add_placeholders()
         self.preprocessed = self.preprocessing(debug_shape)
         self.encoded = self.encode(self.preprocessed, debug_shape)
-        # self.decoded = self.decode(self.encoded, debug_shape)
-        self.decoded = self.add_feed_forward_op(self.encoded, debug_shape)
+        # self.decoded = self.answer_pointer(self.encoded, debug_shape)
+        self.decoded = self.feed_forward_decode(self.encoded, debug_shape)
         self.lost = self.loss(self.decoded, debug_shape)
         self.train_op = self.add_training_op(self.lost, debug_shape)
 
