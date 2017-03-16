@@ -72,6 +72,7 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
         else:
             glove = np.zeros((len(vocab_list), args.glove_dim))
         found = 0
+        size = {"6B": 400000, "840B": 2196017}[args.glove_crawl_size]
         with open(glove_path, 'r') as fh:
             for line in tqdm(fh, total=size):
                 array = line.lstrip().rstrip().split(" ")
