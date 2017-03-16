@@ -8,8 +8,8 @@ import os
 import sys
 from tqdm import tqdm
 import random
-# from pycorenlp import StanfordCoreNLP
-# nlp = StanfordCoreNLP('http://localhost:9000')
+from pycorenlp import StanfordCoreNLP
+nlp = StanfordCoreNLP('http://localhost:9000')
 
 from collections import Counter
 from six.moves.urllib.request import urlretrieve
@@ -78,17 +78,17 @@ def list_topics(data):
     return list_topics
 
 
-def tokenize(sequence):
-    tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
-    return map(lambda x:x.encode('utf8'), tokens)
+def tokenize(sequence, tokenizer="CORE-NLP"):
+    if tokenizer == "CORE-NLP":
+        output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
+        tokens = []
+        for i in range(len(output['sentences'])):
+            tokens += [t['word'].encode('utf-8').replace("``", '"').replace("''", '"') for t in output['sentences'][i]['tokens']]
+        return tokens
+    else:
+        tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
+        return map(lambda x:x.encode('utf8'), tokens)
 
-
-
-
-# def tokenize(sequence):
-#     # assert isinstance(sequence.encode('utf-8'), str)
-#     output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
-#     return [t['word'] for t in output['sentences'][0]['tokens']]
 
 
 
