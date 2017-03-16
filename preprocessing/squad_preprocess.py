@@ -82,18 +82,24 @@ def tokenize(sequence, tokenizer="CORE-NLP"):
     if tokenizer == "CORE-NLP":
         output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
         if isinstance(output, unicode):
-            output  =json.loads(output[:1543]+output[1544:1652]+output[1654:])
+            output = json.loads(output[:1543]+output[1544:1652]+output[1654:])
         tokens = []
+        char_idx_to_token_idx_map = {}
+        token_count = 0;
         for i in range(len(output['sentences'])):
-            tokens += [t['word'].encode('utf-8') for t in output['sentences'][i]['tokens']]
-
-        return tokens
+            for t in output['sentences'][i]['tokens']:
+                char_idx_to_token_idx_map[t['characterOffsetBegin']] = token_count;
+                tokens.append(t['word'].encode('utf-8'))
+                token_count += 1
+        return tokens, char_idx_to_token_idx_map
     else:
         tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
-        return map(lambda x:x.encode('utf8'), tokens)
+        return map(lambda x:x.encode('utf8'), tokens), {}
 
 
 def token_idx_map(context, context_tokens):
+    print(context)
+    print(context_tokens)
     acc = ''
     current_token_idx = 0
     token_map = dict()
@@ -107,6 +113,8 @@ def token_idx_map(context, context_tokens):
                 token_map[syn_start] = [acc, current_token_idx]
                 acc = ''
                 current_token_idx += 1
+    print(token_map)
+    exit()
     return token_map
 
 
@@ -126,7 +134,6 @@ def read_write_dataset(dataset, tier, prefix):
          open(os.path.join(prefix, tier +'.answer'), 'w') as text_file, \
          open(os.path.join(prefix, tier +'.span'), 'w') as span_file:
 
-
         print(len(dataset['data']))
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
@@ -138,13 +145,13 @@ def read_write_dataset(dataset, tier, prefix):
                 context = context.replace("''", '" ')
                 context = context.replace("``", '" ')
 
-                context_tokens = tokenize(context)
-                answer_map = token_idx_map(context, context_tokens)
+                context_tokens, context_char_idx_to_token_idx_map = tokenize(context)
+                # answer_map = token_idx_map(context, context_tokens)
 
                 qas = article_paragraphs[pid]['qas']
                 for qid in range(len(qas)):
                     question = qas[qid]['question']
-                    question_tokens = tokenize(question)
+                    question_tokens, _ = tokenize(question)
 
                     answers = qas[qid]['answers']
                     qn += 1
@@ -156,27 +163,27 @@ def read_write_dataset(dataset, tier, prefix):
                         text = qas[qid]['answers'][ans_id]['text']
                         a_s = qas[qid]['answers'][ans_id]['answer_start']
 
-                        text_tokens = tokenize(text)
+                        text_tokens, _ = tokenize(text)
 
-                        answer_start = qas[qid]['answers'][ans_id]['answer_start']
+                        answer_start_char_idx = qas[qid]['answers'][ans_id]['answer_start']
+                        span_start = context_char_idx_to_token_idx_map[answer_start_char_idx]
+                        span_end = span_start + len(text_tokens) -1
 
-                        answer_end = answer_start + len(text)
+                        # print(context_tokens[span_start])
+                        # print(context_tokens[span_end])
+                        #
+                        # print(text_tokens)
+                        #
+                        # exit()
 
-                        last_word_answer = len(text_tokens[-1]) # add one to get the first char
+                        # remove length restraint since we deal with it later
+                        context_file.write(' '.join(context_tokens) + '\n')
+                        question_file.write(' '.join(question_tokens) + '\n')
+                        text_file.write(' '.join(text_tokens) + '\n')
+                        span_file.write(' '.join([str(span_start), str(span_end)]) + '\n')
 
-                        try:
-                            a_start_idx = answer_map[answer_start][1]
-
-                            a_end_idx = answer_map[answer_end - last_word_answer][1]
-
-                            # remove length restraint since we deal with it later
-                            context_file.write(' '.join(context_tokens) + '\n')
-                            question_file.write(' '.join(question_tokens) + '\n')
-                            text_file.write(' '.join(text_tokens) + '\n')
-                            span_file.write(' '.join([str(a_start_idx), str(a_end_idx)]) + '\n')
-
-                        except Exception as e:
-                            skipped += 1
+                        # except Exception as e:
+                        #     skipped += 1
 
                         an += 1
 
