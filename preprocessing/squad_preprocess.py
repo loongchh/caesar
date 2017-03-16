@@ -81,9 +81,12 @@ def list_topics(data):
 def tokenize(sequence, tokenizer="CORE-NLP"):
     if tokenizer == "CORE-NLP":
         output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
+        if isinstance(output, unicode):
+            output  =json.loads(output[:1543]+output[1544:1652]+output[1654:])
         tokens = []
         for i in range(len(output['sentences'])):
             tokens += [t['word'].encode('utf-8') for t in output['sentences'][i]['tokens']]
+
         return tokens
     else:
         tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
@@ -123,7 +126,12 @@ def read_write_dataset(dataset, tier, prefix):
          open(os.path.join(prefix, tier +'.answer'), 'w') as text_file, \
          open(os.path.join(prefix, tier +'.span'), 'w') as span_file:
 
+
+        print(len(dataset['data']))
+
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
+            if articles_id < 386:
+                continue
             article_paragraphs = dataset['data'][articles_id]['paragraphs']
             for pid in range(len(article_paragraphs)):
                 context = article_paragraphs[pid]['context']
@@ -132,8 +140,8 @@ def read_write_dataset(dataset, tier, prefix):
                 context = context.replace("''", '" ')
                 context = context.replace("``", '" ')
 
-                # context_tokens = tokenize(context)
-                answer_map = []#token_idx_map(context, context_tokens)
+                context_tokens = tokenize(context)
+                answer_map = token_idx_map(context, context_tokens)
 
                 qas = article_paragraphs[pid]['qas']
                 for qid in range(len(qas)):
