@@ -110,7 +110,7 @@ def evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text):
 
 
 def train():
-    run_id = str(datetime.now()).split(".")[0].replace(' ','-').replace(':','-')
+    run_id = str(datetime.now()).split(".")[0].replace(' ','_').replace(':','_').replace('-','_')
     logger.info("----------------Training model- {} -----------------------------".format(run_id))
     vocab,rev_vocab = du.initialize_vocab()
 
