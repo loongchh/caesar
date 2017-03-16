@@ -94,8 +94,10 @@ def prepare_dev(prefix, dev_filename, vocab):
 def generate_answers(session,model, dataset, rev_vocab):
     answers = {}
     num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
+    print ("num_dev_batches: {}".format(num_dev_batches))
     for i in range(num_dev_batches):
         data_batch = du.get_batch(dataset, i)
+        print ("batch_length for {}-th batch: {}".format(i, len(data_batch['q'])))
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
         print ("{}, {}".format(i, len(pred)))
         for j,document in enumerate(data_batch['c']):
