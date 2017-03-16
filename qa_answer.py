@@ -67,6 +67,7 @@ def read_dataset(dataset, tier, vocab):
 
             qas = article_paragraphs[pid]['qas']
             for qid in range(len(qas)):
+                print(qid)
                 question = qas[qid]['question']
                 question_tokens = tokenize(question)
                 question_uuid = qas[qid]['id']
@@ -155,7 +156,7 @@ def main(_):
     with tf.Session() as sess:
         du.restore_model(session=sess, run_id=FLAGS.run_id)
         pred = model.predict_on_batch(sess=sess, data_batch=dataset)
-        answers = generate_answers(sess, dataset, rev_vocab=rev_vocab)
+        answers = generate_answers(sess, model, dataset, rev_vocab=rev_vocab)
 
         print (answers)
 
