@@ -144,7 +144,7 @@ class CoattentionModel():
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
+            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
             (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed, dtype=tf.float32)
             tf.get_variable_scope().reuse_variables()
             (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
@@ -170,8 +170,8 @@ class CoattentionModel():
             b_q = tf.get_variable("b_q", shape=(FLAGS.state_size),
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
             # Q = tf.tanh(tf.einsum('ijk,kl->ijl', Q, W_q) + b_q)
-            Q = tf.scan(lambda a, x: tf.matmul(x, W_q), Q)
-            Q = tf.tanh(Q +  b_q)
+            Q = tf.tanh(tf.map_fn(lambda x: tf.matmul(x, W_q) + b_q, Q))
+            # Q = tf.tanh(Q + b_q)
 
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
@@ -188,9 +188,13 @@ class CoattentionModel():
         assert_shape(L, "L", [None, FLAGS.max_question_size, FLAGS.max_document_size])
 
         # Normalize with respect to question/document.
-        A_q = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
+        # A_q = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
+        # assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_document_size])
+        # A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
+        # assert_shape(A_d, "A_d", [None, FLAGS.max_document_size, FLAGS.max_question_size])
+        A_q = tf.map_fn(lambda x: tf.nn.softmax(x, axis=0), L, dtype=tf.float32)
         assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_document_size])
-        A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
+        A_d = tf.map_fn(lambda x: tf.nn.softmax(x, axis=0), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
         assert_shape(A_d, "A_d", [None, FLAGS.max_document_size, FLAGS.max_question_size])
 
         # Attention of the document w.r.t question.
