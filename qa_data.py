@@ -66,7 +66,7 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
     :return:
     """
     if not gfile.Exists(save_path + ".npz"):
-        glove_path = os.path.join(args.glove_dir, "glove.6B.{}d.txt".format(args.glove_dim))
+        glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.glove_crawl_size, args.glove_dim))
         if random_init:
             glove = np.random.randn(len(vocab_list), args.glove_dim)
         else:
@@ -141,16 +141,6 @@ def data_to_token_ids(data_path, target_path, vocabulary_path,
                         print("tokenizing line %d" % counter)
                     token_ids = sentence_to_token_ids(line, vocab, tokenizer)
                     tokens_file.write(" ".join([str(tok) for tok in token_ids]) + "\n")
-
-
-# class CoreNLPTokenizer:
-#
-#     def __init__(self):
-#         self.nlp = StanfordCoreNLP('http://localhost:9000')
-#
-#     def __call__(self, *args, **kwargs):
-#         output = self.nlp.annotate(args[0].encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
-#         return [t['word'] for t in output['sentences'][0]['tokens']]
 
 
 if __name__ == '__main__':

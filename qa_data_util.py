@@ -47,7 +47,7 @@ def restore_model(session, run_id, version=1):
 
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed{}.{}.npz".format(FLAGS.glove_crawl_size, FLAGS.embedding_size))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
 
