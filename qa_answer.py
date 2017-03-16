@@ -95,7 +95,7 @@ def generate_answers(predicted_spans, documents, rev_vocab):
     answers = []
 
     for i,span in enumerate(predicted_spans):
-        predicted_tokens = [rev_vocab[documents[i][index]] for index in documents[i] if index < FLAGS.max_document_size]
+        predicted_tokens = [rev_vocab[documents[i][index]] for index in span]
         predicted_text = " ".join(predicted_tokens)
         answers.append(predicted_text)
     return answers
