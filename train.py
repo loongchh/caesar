@@ -251,9 +251,59 @@ def debug():
                 data_batch=get_batch(val_data,0)
             )
 
+def test_summary_size():
+    logger.info("=============== Testing summary size ===============")
+    vocab,rev_vocab = initialize_vocab()
+
+    embeddings = load_embeddings()
+    val_data = load_dataset(type="val")
+
+    with tf.Graph().as_default():
+        logger.debug("Building model...",)
+        start = time.time()
+        model = choose_model(embeddings=embeddings)
+        logger.debug("Took %.2f seconds.", time.time() - start)
+        init = tf.global_variables_initializer()
+
+        with tf.Session() as session:
+            # TODO: Play more with TFDG Debugger
+            # session = tf_debug.LocalCLIDebugWrapperSession(session)
+            # session.add_tensor_filter("has_inf_or_nan", tf_debug.has_inf_or_nan)
+
+            # TODO: tensorboard summary writer
+            # train_writer = tf.summary.FileWriter(FLAGS.log_dir + '/train', session.graph)
+            session.run(init)
+
+            successes_per_epoch = []
+            for epoch in range(FLAGS.epochs):
+
+                # TODO: tensorboard summary writer
+                # run_metadata = tf.RunMetadata()
+                # train_writer.add_run_metadata(run_metadata, 'step%03d' % epoch)
+
+                logger.debug("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
+                # Training
+                successes_per_epoch.append(summary_success_epoch(val_data, model, session))
+                
+
+    def summary_success_epoch(train_data, model, session):
+        num_train_batches = int(len(train_data['q']) / FLAGS.batch_size)
+        prog = Progbar(target=num_train_batches)
+        permutation = np.random.permutation(num_train_batches*FLAGS.batch_size)
+        successes = []
+        for i in range(num_train_batches):
+            if i >= FLAGS.train_batch >= 0:
+                break
+            data_batch = get_batch(train_data, i, permutation=permutation)
+            successes.append(model.summary_success(sess=session, data_batch=data_batch))
+            prog.update(i+1, [("successes", sum(successes))])
+
+        logger.debug("Summarization: %d out of %d answers are retained", sum(successes), int(len(train_data['q']))
+        return sum(successes)
 
 if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug == 1:
         debug()
+        test_summary_size()
     train()

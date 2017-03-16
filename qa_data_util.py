@@ -75,9 +75,11 @@ def load_dataset(type='train', plot=False, debug=False):
     data_dir = FLAGS.data_dir
     train_path_q = pjoin(data_dir, "{}.ids.question".format(type))
     train_path_c = pjoin(data_dir, "{}.ids.context".format(type))
+    train_path_s = pjoin(data_dir, "{}.context.sentence".format(type))
     train_path_a = pjoin(data_dir, "{}.span".format(type))
     questions = read_dataset(train_path_q)
     contexts = read_dataset(train_path_c)
+    sentences = read_dataset(train_path_s)
     spans = read_dataset(train_path_a)
 
     # Assert data length
@@ -87,11 +89,13 @@ def load_dataset(type='train', plot=False, debug=False):
     # cast the data from string to int
     questions = cast_to_int(questions)
     contexts = cast_to_int(contexts)
+    sentences = cast_to_int(sentences)
     spans = cast_to_int(spans)
 
     # Flatten Answer span to obtain Ground Truth
     ground_truth = get_answer_from_span(spans)
     if debug:
+        logger.debug("Sentence Span: {}".format(sentences[0]))
         logger.debug("Sample Span: {}".format(spans[0]))
         logger.debug("Flattened Answer from span: {}".format(ground_truth[0]))
 
@@ -100,7 +104,7 @@ def load_dataset(type='train', plot=False, debug=False):
         plot_histogram(contexts, "{}-contexts".format(type))
         plot_histogram(ground_truth, "{}-answers".format(type))
 
-    questions, contexts,spans, ground_truth = filter_data(questions, contexts, spans, ground_truth)
+    questions, contexts, sentences, spans, ground_truth = filter_data(questions, contexts, sentences, spans, ground_truth)
 
     if debug:
         logger.debug("Filtered {} data, new size {}.".format(type, len(questions)))
@@ -110,7 +114,7 @@ def load_dataset(type='train', plot=False, debug=False):
         plot_histogram(ground_truth, "{}-answers-filtered".format(type))
 
     questions, questions_mask, questions_seq = padding(questions, FLAGS.max_question_size)
-    contexts, contexts_mask, contexts_seq = padding(contexts, FLAGS.max_document_size)
+    contexts, contexts_mask, contexts_seq, sentence_span, answer_span = padding(contexts, FLAGS.max_document_size, sentences=sentences, spans=spans)
     answers, answers_mask, answers_seq = padding(ground_truth,FLAGS.max_answer_size, zero_vector=FLAGS.max_document_size)
 
     if plot:
@@ -125,6 +129,8 @@ def load_dataset(type='train', plot=False, debug=False):
         'c': contexts,
         'c_m': contexts_mask,
         'c_s': contexts_seq,
+        's_s': sentence_span,
+        'an_s': answer_span,
         's': spans,
         'gt': ground_truth,
         's_e': answers,
@@ -139,8 +145,7 @@ def cast_to_int(data):
     return [[int(field) for field in record] for record in data]
 
 
-def filter_data(questions, contexts, spans, exploded_spans):
-
+def filter_data(questions, contexts, sentences, spans, exploded_spans):
     def filter(q_len, c_len, a_len=1):
         filter1 = FLAGS.min_question_size < q_len <= FLAGS.max_question_size
         filter2 = FLAGS.min_document_size < c_len <= FLAGS.max_document_size
@@ -152,6 +157,7 @@ def filter_data(questions, contexts, spans, exploded_spans):
     return (
         [questions[i] for i in indices],
         [contexts[i] for i in indices],
+        [sentences[i] for i in indices],
         [spans[i] for i in indices],
         [exploded_spans[i] for i in indices]
     )
@@ -165,8 +171,7 @@ def get_answer_from_span(spans):
     return [fun(s[0], s[1]) for s in spans]
 
 
-def padding(data, max_length, zero_vector=0):
-
+def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
     # clip records to max length
     data = [record[:max_length] for record in data]
 
@@ -178,8 +183,24 @@ def padding(data, max_length, zero_vector=0):
 
     # padded data
     data = [record[:] + (max_length - len(record))*[zero_vector] for record in data]
+    
+    if sentences:
+        for sentence_span in sentences:
+            if sentence_span[-1] >= max_length:
+                sentence_span = [s for s in sentence_span if s < max_length]
+            sentence_span.append(max_length)
+            sentence_span += [-1] * (max_length + 1 - len(sentence_span))
 
-    return data, mask,seq
+        answer_span = []
+        for (j, ans) in enumerate(spans):
+            try:
+                answer_span.append((i for (i, v) in enumerate(sentences[j]) if v > ans[0]).next())
+            except StopIteration as si:
+                answer_span.append(-1)
+
+        return data, mask, seq, sentences, answer_span
+
+    return data, mask, seq
 
 
 def plot_histogram(data,name ):
@@ -269,5 +290,5 @@ if __name__ == '__main__':
     #
     # print embeddings[vocab['Who']]
     # exit()
-    train_data = load_dataset(type = "train", plot=True)
+    # train_data = load_dataset(type = "train", plot=True)
     val_data = load_dataset(type = "val", plot=True)
