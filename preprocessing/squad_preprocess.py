@@ -133,7 +133,7 @@ def read_write_dataset(dataset, tier, prefix):
                 context = context.replace("``", '" ')
 
                 # context_tokens = tokenize(context)
-                answer_map = token_idx_map(context, context_tokens)
+                answer_map = []#token_idx_map(context, context_tokens)
 
                 qas = article_paragraphs[pid]['qas']
                 for qid in range(len(qas)):
