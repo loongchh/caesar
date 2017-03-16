@@ -94,7 +94,7 @@ def tokenize(sequence, tokenizer="nltk"):
         sentence_span = [0]
         for sen in sentences:
             tokens += [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sen)]
-            sentence_span.append(sentence_span[-1] + len(tokens))
+            sentence_span.append(len(tokens))
 
         sentence_span = [str(s) for s in sentence_span]
         return tokens, sentence_span
