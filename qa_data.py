@@ -34,7 +34,8 @@ def setup_args():
     parser.add_argument("--source_dir", default=source_dir)
     parser.add_argument("--glove_dir", default=glove_dir)
     parser.add_argument("--vocab_dir", default=vocab_dir)
-    parser.add_argument("--glove_dim", default=100, type=int)
+    parser.add_argument("--glove_dim", default=300, type=int)
+    parser.add_argument("--glove_crawl_size", default="840B")
     parser.add_argument("--random_init", default=True, type=bool)
     return parser.parse_args()
 
