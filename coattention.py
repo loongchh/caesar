@@ -325,8 +325,8 @@ class CoattentionModel():
         self.add_placeholders()
         self.preprocessing = self.contextual_preprocessing(debug)
         self.encode = self.coattention_encode(self.preprocessing, debug)
-        self.decode = self.answer_pointer_decode(self.encode, debug)
-        # self.decode = self.feed_forward_decode(self.encode, debug)
+        # self.decode = self.answer_pointer_decode(self.encode, debug)
+        self.decode = self.feed_forward_decode(self.encode, debug)
         self.loss = self.cross_entropy_loss(self.decode, debug)
         self.train_op = self.add_train_op(self.loss, debug)
 
