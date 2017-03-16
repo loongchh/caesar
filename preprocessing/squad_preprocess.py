@@ -83,15 +83,11 @@ def tokenize(sequence, tokenizer="CORE-NLP"):
         output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
         tokens = []
         for i in range(len(output['sentences'])):
-            tokens += [t['word'].encode('utf-8').replace("``", '"').replace("''", '"') for t in output['sentences'][i]['tokens']]
+            tokens += [t['word'].encode('utf-8') for t in output['sentences'][i]['tokens']]
         return tokens
     else:
         tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
         return map(lambda x:x.encode('utf8'), tokens)
-
-
-
-
 
 
 def token_idx_map(context, context_tokens):
@@ -136,7 +132,7 @@ def read_write_dataset(dataset, tier, prefix):
                 context = context.replace("''", '" ')
                 context = context.replace("``", '" ')
 
-                context_tokens = tokenize(context)
+                # context_tokens = tokenize(context)
                 answer_map = token_idx_map(context, context_tokens)
 
                 qas = article_paragraphs[pid]['qas']

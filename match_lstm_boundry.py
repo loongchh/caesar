@@ -22,46 +22,28 @@ class MatchLstmBoundryModel():
 
 
     def add_placeholders(self):
-        self.question_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size, FLAGS.max_question_size),
-                                                name="question_placeholder")
-        self.question_mask_placeholder = tf.placeholder(tf.bool,
-                                                shape=(FLAGS.batch_size, FLAGS.max_question_size),
-                                                name="question_mask_placeholder")
-
-        self.question_seq_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size),
-                                                name="question_seq_placeholder")
-
-        self.document_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size, FLAGS.max_document_size),
-                                                name="document_placeholder")
-
-        self.document_mask_placeholder = tf.placeholder(tf.bool,
-                                                shape=(FLAGS.batch_size, FLAGS.max_document_size),
-                                                name="document_mask_placeholder")
-
-        self.document_seq_placeholder = tf.placeholder(tf.int32,
-                                                shape=(FLAGS.batch_size),
-                                                name="document_seq_placeholder")
-
-        self.span_placeholder = tf.placeholder(tf.int32,
-                                               shape=(FLAGS.batch_size, 2),
+        self.question_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_question_size),
+                                                   name="question_placeholder")
+        self.question_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_question_size),
+                                                        name="question_mask_placeholder")
+        self.question_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
+                                                       name="question_seq_placeholder")
+        self.document_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size),
+                                                   name="document_placeholder")
+        self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
+                                                        name="document_mask_placeholder")
+        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
+                                                       name="document_seq_placeholder")
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")
+        self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
+                                                 name="answer_placeholder")
+        self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_answer_size),
+                                                      name="answer_mask_placeholder")
+        self.answer_seq_placeholder = tf.placeholder(tf.int32, shape=[None],
+                                                     name="answer_seq_placeholder")
+        self.dropout_placeholder = tf.placeholder(tf.float32, name="dropout_placeholder")
 
-        self.answer_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
-                                                        name="answer_placeholder")
-
-        self.answer_mask_placeholder = tf.placeholder(tf.bool,
-                                                        shape=(FLAGS.batch_size, FLAGS.max_answer_size),
-                                                        name="answer_mask_placeholder")
-        self.answer_seq_placeholder = tf.placeholder(tf.int32,
-                                                        shape=(FLAGS.batch_size, ),
-                                                        name="answer_seq_placeholder")
-
-        self.dropout_placeholder = tf.placeholder(tf.float32,
-                                                  name="dropout_placeholder")
 
     def create_feed_dict(self, data_batch, dropout=1):
         feed_dict = {
