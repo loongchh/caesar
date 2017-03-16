@@ -130,8 +130,6 @@ def read_write_dataset(dataset, tier, prefix):
         print(len(dataset['data']))
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
-            if articles_id < 386:
-                continue
             article_paragraphs = dataset['data'][articles_id]['paragraphs']
             for pid in range(len(article_paragraphs)):
                 context = article_paragraphs[pid]['context']
