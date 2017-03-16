@@ -97,6 +97,7 @@ def generate_answers(session,model, dataset, rev_vocab):
     for i in range(num_dev_batches):
         data_batch = du.get_batch(dataset, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
+        print ("{}, {}".format(i, len(pred)))
         for j,document in enumerate(data_batch['c']):
             answers[dataset['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
     return answers
@@ -121,8 +122,6 @@ def main(_):
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
     contexts, questions, question_uuids = prepare_dev(dev_dirname, dev_filename, vocab)
-    questions=questions[:100]
-    contexts=contexts[:100]
 
     questions = [qa_data.basic_tokenizer(records) for records in questions]
 
@@ -153,8 +152,6 @@ def main(_):
         du.restore_model(session=sess, run_id=FLAGS.run_id)
         pred = model.predict_on_batch(sess=sess, data_batch=dataset)
         answers = generate_answers(sess, model, dataset, rev_vocab=rev_vocab)
-
-        print (answers)
 
         # write to json file to root dir
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
