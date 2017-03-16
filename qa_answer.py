@@ -7,6 +7,7 @@ import os
 import json
 from os.path import join as pjoin
 import logging
+from util import Progbar
 
 from tqdm import tqdm
 import tensorflow as tf
@@ -94,11 +95,15 @@ def prepare_dev(prefix, dev_filename, vocab):
 def generate_answers(session,model, dataset, rev_vocab):
     answers = {}
     num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
+    prog = Progbar(target=num_dev_batches)
     for i in range(num_dev_batches):
         data_batch = du.get_batch(dataset, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
         for j,document in enumerate(data_batch['c']):
             answers[data_batch['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
+
+        prog.update(i+1, [])
+
     return answers
 
 
