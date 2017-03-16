@@ -67,7 +67,6 @@ def read_dataset(dataset, tier, vocab):
 
             qas = article_paragraphs[pid]['qas']
             for qid in range(len(qas)):
-                print(qid)
                 question = qas[qid]['question']
                 question_tokens = tokenize(question)
                 question_uuid = qas[qid]['id']
@@ -92,18 +91,14 @@ def prepare_dev(prefix, dev_filename, vocab):
     return context_data, question_data, question_uuid_data
 
 
-def span_to_answer(document, span, rev_vocab):
-    predicted_tokens = [rev_vocab[document[index]] for index in span]
-    return " ".join(predicted_tokens)
-
-
 def generate_answers(session,model, dataset, rev_vocab):
-    answers = []
+    answers = {}
     num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
     for i in range(num_dev_batches):
         data_batch = du.get_batch(dataset, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
-        answers += [span_to_answer(dataset['c'][i], span) for i,span in enumerate(pred)]
+        for j,document in enumerate(data_batch['c']):
+            answers[dataset['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
     return answers
 
 
@@ -125,7 +120,7 @@ def main(_):
 
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
-    contexts, questions, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
+    contexts, questions, question_uuids = prepare_dev(dev_dirname, dev_filename, vocab)
     questions=questions[:100]
     contexts=contexts[:100]
 
@@ -142,11 +137,12 @@ def main(_):
         'q_s': questions_seq,
         'c': contexts,
         'c_m': contexts_mask,
-        'c_s': contexts_seq
+        'c_s': contexts_seq,
+        'q_uuids':question_uuids
     }
 
     print(dataset['q'][0])
-    print(dataset['q_s'][0])
+    print(dataset['q_uuids'][0])
     print(dataset['c'][0])
 
     # ========= Model-specific =========
