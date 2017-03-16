@@ -3,7 +3,7 @@ import tensorflow as tf
 def parse_args():
     # model
     tf.app.flags.DEFINE_string("model","coattention", "coattention/match_lstm/match_lstm_boundry")
-    tf.app.flags.DEFINE_string("run_id","2017-03-15-12-06-42", "model run id, eg. 2017-03-15-01-51-39")
+    tf.app.flags.DEFINE_string("run_id","model1", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
     tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
