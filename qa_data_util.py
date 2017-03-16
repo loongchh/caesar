@@ -2,8 +2,8 @@ import logging
 import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
-from datetime import datetime
 import os
+import subprocess
 
 import parse_args
 FLAGS = tf.app.flags.FLAGS
@@ -37,6 +37,9 @@ def checkpoint_model(session,run_id, version=1):
     save_path = saver.save(session,pjoin(save_dir, "model-{}.ckpt".format(version)))
     logger.info("Model saved at: %s" % save_path)
 
+    if FLAGS.cluster_mode ==1:
+        copyToHDFS(save_dir, pjoin(FLAGS.train_dir, FLAGS.model) )
+
 
 def restore_model(session, run_id, version=1):
     saver = tf.train.Saver()
@@ -45,8 +48,14 @@ def restore_model(session, run_id, version=1):
     logger.info("Model restored from: {}".format(save_path))
 
 
+def copyToHDFS(local_dir, hdfs_dir):
+    FNULL = open(os.devnull, 'w')
+    subprocess.call(["hdfs", "dfs", "-mkdir", "-p", hdfs_dir], stdout=FNULL, stderr=FNULL)
+    subprocess.call(["hdfs", "dfs", "-copyFromLocal", local_dir, hdfs_dir], stdout=FNULL, stderr=FNULL)
+
+
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.npz".format(FLAGS.embedding_size))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed{}.{}.npz".format(FLAGS.glove_crawl_size, FLAGS.embedding_size))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
 
@@ -206,8 +215,10 @@ def initialize_vocab():
 
 
 def get_batch(data, i, permutation=None):
+    data_len = len(data['q'])
+
     start = i*FLAGS.batch_size
-    end = (i+1)*FLAGS.batch_size
+    end = min((i+1)*FLAGS.batch_size, data_len)
 
     if permutation is not None:
         indices = permutation[start:end]
@@ -223,7 +234,7 @@ def get_batch(data, i, permutation=None):
 
 def test_get_batch():
     data = {
-        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size
+        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size + [[10, 11, 12]]*4
     }
     # test without permutation
     assert get_batch(data,1) == {"q": [[3,4,6]]*FLAGS.batch_size}
@@ -239,6 +250,8 @@ def test_get_batch():
     actual = get_batch(data, 1, permutation=permutation)
     expected = {"q": [[1, 2, 3] if idx < FLAGS.batch_size else [3, 4, 6] for i, idx in enumerate(permutation) if i >= FLAGS.batch_size]}
     assert actual == expected
+
+    print(get_batch(data, 2))
 
 if __name__ == '__main__':
     parse_args.parse_args()

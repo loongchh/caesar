@@ -8,8 +8,8 @@ import os
 import sys
 from tqdm import tqdm
 import random
-# from pycorenlp import StanfordCoreNLP
-# nlp = StanfordCoreNLP('http://localhost:9000')
+from pycorenlp import StanfordCoreNLP
+nlp = StanfordCoreNLP('http://localhost:9000')
 
 from collections import Counter
 from six.moves.urllib.request import urlretrieve
@@ -78,20 +78,19 @@ def list_topics(data):
     return list_topics
 
 
-def tokenize(sequence):
-    tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
-    return map(lambda x:x.encode('utf8'), tokens)
+def tokenize(sequence, tokenizer="CORE-NLP"):
+    if tokenizer == "CORE-NLP":
+        output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
+        if isinstance(output, unicode):
+            output  =json.loads(output[:1543]+output[1544:1652]+output[1654:])
+        tokens = []
+        for i in range(len(output['sentences'])):
+            tokens += [t['word'].encode('utf-8') for t in output['sentences'][i]['tokens']]
 
-
-
-
-# def tokenize(sequence):
-#     # assert isinstance(sequence.encode('utf-8'), str)
-#     output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json' })
-#     return [t['word'] for t in output['sentences'][0]['tokens']]
-
-
-
+        return tokens
+    else:
+        tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
+        return map(lambda x:x.encode('utf8'), tokens)
 
 
 def token_idx_map(context, context_tokens):
@@ -126,6 +125,9 @@ def read_write_dataset(dataset, tier, prefix):
          open(os.path.join(prefix, tier +'.question'), 'w') as question_file,\
          open(os.path.join(prefix, tier +'.answer'), 'w') as text_file, \
          open(os.path.join(prefix, tier +'.span'), 'w') as span_file:
+
+
+        print(len(dataset['data']))
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
             article_paragraphs = dataset['data'][articles_id]['paragraphs']

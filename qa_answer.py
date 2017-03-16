@@ -7,6 +7,7 @@ import os
 import json
 from os.path import join as pjoin
 import logging
+from util import Progbar
 
 from tqdm import tqdm
 import tensorflow as tf
@@ -91,13 +92,18 @@ def prepare_dev(prefix, dev_filename, vocab):
     return context_data, question_data, question_uuid_data
 
 
-def generate_answers(predicted_spans, documents, rev_vocab):
-    answers = []
+def generate_answers(session,model, dataset, rev_vocab):
+    answers = {}
+    num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
+    prog = Progbar(target=num_dev_batches)
+    for i in range(num_dev_batches):
+        data_batch = du.get_batch(dataset, i)
+        pred = model.predict_on_batch(sess=session, data_batch=data_batch)
+        for j,document in enumerate(data_batch['c']):
+            answers[data_batch['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
 
-    for i,span in enumerate(predicted_spans):
-        predicted_tokens = [rev_vocab[documents[i][index]] for index in documents[i] if index < FLAGS.max_document_size]
-        predicted_text = " ".join(predicted_tokens)
-        answers.append(predicted_text)
+        prog.update(i+1, [])
+
     return answers
 
 
@@ -119,9 +125,7 @@ def main(_):
 
     dev_dirname = os.path.dirname(os.path.abspath(FLAGS.dev_path))
     dev_filename = os.path.basename(FLAGS.dev_path)
-    contexts, questions, question_uuid_data = prepare_dev(dev_dirname, dev_filename, vocab)
-    questions=questions[:100]
-    contexts=contexts[:100]
+    contexts, questions, question_uuids = prepare_dev(dev_dirname, dev_filename, vocab)
 
     questions = [qa_data.basic_tokenizer(records) for records in questions]
 
@@ -136,25 +140,21 @@ def main(_):
         'q_s': questions_seq,
         'c': contexts,
         'c_m': contexts_mask,
-        'c_s': contexts_seq
+        'c_s': contexts_seq,
+        'q_uuids':question_uuids
     }
-
-    print(dataset['q'][0])
-    print(dataset['q_s'][0])
-    print(dataset['c'][0])
-
+    print("lenght of dev set: {}".format(len(dataset['q'])))
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
     model = du.choose_model(embeddings=embeddings)
 
     with tf.Session() as sess:
         du.restore_model(session=sess, run_id=FLAGS.run_id)
-        pred = model.predict_on_batch(sess=sess, data_batch=dataset)
-        answers = generate_answers(pred, documents=dataset['c'], rev_vocab=rev_vocab)
+        answers = generate_answers(sess, model, dataset, rev_vocab=rev_vocab)
 
-        # # write to json file to root dir
-        # with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
-        #     f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+        # write to json file to root dir
+        with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
+            f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
 
 if __name__ == "__main__":

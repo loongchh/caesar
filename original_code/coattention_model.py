@@ -1,7 +1,8 @@
 import logging
+
 import tensorflow as tf
-from model import QAModel
-import code.util
+
+from code.model import QAModel
 
 FLAGS = tf.app.flags.FLAGS
 

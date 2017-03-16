@@ -3,8 +3,9 @@
 # and saves preprocessed data into ./data
 # Get directory containing this script
 
-CODE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
+CODE_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/code"
 
+echo $CODE_DIR
 export PYTHONPATH=$PYTHONPATH:$CODE_DIR
 
 pip install -r $CODE_DIR/requirements.txt
@@ -27,4 +28,4 @@ python2 $CODE_DIR/preprocessing/squad_preprocess.py
 python2 $CODE_DIR/preprocessing/dwr.py
 
 # Data processing for TensorFlow
-python2 $CODE_DIR/qa_data.py --glove_dim 100
+python2 $CODE_DIR/qa_data.py --glove_dim 100 --glove_crawl_size 6B
