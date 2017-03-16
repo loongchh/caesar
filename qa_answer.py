@@ -91,13 +91,18 @@ def prepare_dev(prefix, dev_filename, vocab):
     return context_data, question_data, question_uuid_data
 
 
-def generate_answers(predicted_spans, documents, rev_vocab):
-    answers = []
+def span_to_answer(document, span, rev_vocab):
+    predicted_tokens = [rev_vocab[document[index]] for index in span]
+    return " ".join(predicted_tokens)
 
-    for i,span in enumerate(predicted_spans):
-        predicted_tokens = [rev_vocab[documents[i][index]] for index in span]
-        predicted_text = " ".join(predicted_tokens)
-        answers.append(predicted_text)
+
+def generate_answers(session,model, dataset, rev_vocab):
+    answers = []
+    num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
+    for i in range(num_dev_batches):
+        data_batch = du.get_batch(dataset, i)
+        pred = model.predict_on_batch(sess=session, data_batch=data_batch)
+        answers += [span_to_answer(dataset['c'][i], span) for i,span in enumerate(pred)]
     return answers
 
 
@@ -150,12 +155,13 @@ def main(_):
     with tf.Session() as sess:
         du.restore_model(session=sess, run_id=FLAGS.run_id)
         pred = model.predict_on_batch(sess=sess, data_batch=dataset)
-        answers = generate_answers(pred, documents=dataset['c'], rev_vocab=rev_vocab)
+        answers = generate_answers(sess, dataset, rev_vocab=rev_vocab)
 
-        # # write to json file to root dir
-        # with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
-        #     f.write(unicode(json.dumps(answers, ensure_ascii=False)))
-	print (answers)
+        print (answers)
+
+        # write to json file to root dir
+        with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
+            f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
 
 if __name__ == "__main__":

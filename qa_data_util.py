@@ -205,8 +205,10 @@ def initialize_vocab():
 
 
 def get_batch(data, i, permutation=None):
+    data_len = len(data['q'])
+
     start = i*FLAGS.batch_size
-    end = (i+1)*FLAGS.batch_size
+    end = min((i+1)*FLAGS.batch_size, data_len)
 
     if permutation is not None:
         indices = permutation[start:end]
@@ -222,7 +224,7 @@ def get_batch(data, i, permutation=None):
 
 def test_get_batch():
     data = {
-        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size
+        "q": [[1, 2, 3]]*FLAGS.batch_size + [[3, 4, 6]]*FLAGS.batch_size + [[10, 11, 12]]*4
     }
     # test without permutation
     assert get_batch(data,1) == {"q": [[3,4,6]]*FLAGS.batch_size}
@@ -238,6 +240,8 @@ def test_get_batch():
     actual = get_batch(data, 1, permutation=permutation)
     expected = {"q": [[1, 2, 3] if idx < FLAGS.batch_size else [3, 4, 6] for i, idx in enumerate(permutation) if i >= FLAGS.batch_size]}
     assert actual == expected
+
+    print(get_batch(data, 2))
 
 if __name__ == '__main__':
     parse_args.parse_args()
