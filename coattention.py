@@ -35,12 +35,10 @@ class CoattentionModel():
         self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
-        self.document_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
-                                                            name="document_sentence_placeholder")
-        self.span_sentence_placeholder = tf.placeholder(tf.int32, shape=(None),
+        self.sentence_span_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
                                                         name="span_sentence_placeholder")
-        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
-                                               name="span_placeholder")
+        self.answer_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+                                                          name="answer_sentence_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
                                                  name="answer_placeholder")
         self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_answer_size),
@@ -61,12 +59,10 @@ class CoattentionModel():
 
         if dropout is not None:
             feed_dict[self.dropout_placeholder] = dropout
-        if 'd_s' in data_batch and data_batch['d_s'] is not None:
-            feed_dict[self.document_sentence_placeholder] = data_batch['d_s']
-        if 'd_n_s' in data_batch and data_batch['d_n_s'] is not None:
-            feed_dict[self.document_n_sentence_placeholder] = data_batch['d_n_s']
         if 's_s' in data_batch and data_batch['s_s'] is not None:
-            feed_dict[self.span_sentence_placeholder] = data_batch['d_n_s']
+            feed_dict[self.sentence_span_placeholder] = data_batch['s_s']
+        if 'an_s' in data_batch and data_batch['an_s'] is not None:
+            feed_dict[self.answer_sentence_placeholder] = data_batch['an_s']
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
         if 'a' in data_batch and data_batch['a'] is not None:
