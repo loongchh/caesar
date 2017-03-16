@@ -2,8 +2,8 @@ import logging
 import tensorflow as tf
 import numpy as np
 from os.path import join as pjoin
-from datetime import datetime
 import os
+import subprocess
 
 import parse_args
 FLAGS = tf.app.flags.FLAGS
@@ -38,12 +38,21 @@ def checkpoint_model(session,run_id, version=1):
     save_path = saver.save(session,pjoin(save_dir, "model-{}.ckpt".format(version)))
     logger.info("Model saved in file: %s" % save_path)
 
+    if FLAGS.cluster_mode ==1:
+        copyToHDFS(save_dir, pjoin(FLAGS.train_dir, FLAGS.model) )
+
 
 def restore_model(session, run_id, version=1):
     saver = tf.train.Saver()
     save_path = pjoin(FLAGS.train_dir, FLAGS.model, run_id, "model-{}.ckpt".format(version))
     saver.restore(session, save_path)
     logger.info("Model restored from file: {}".format(save_path))
+
+
+def copyToHDFS(local_dir, hdfs_dir):
+    FNULL = open(os.devnull, 'w')
+    subprocess.call(["hdfs", "dfs", "-mkdir", "-p", hdfs_dir], stdout=FNULL, stderr=FNULL)
+    subprocess.call(["hdfs", "dfs", "-copyFromLocal", local_dir, hdfs_dir], stdout=FNULL, stderr=FNULL)
 
 
 def load_embeddings():
