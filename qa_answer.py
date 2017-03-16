@@ -142,17 +142,12 @@ def main(_):
         'q_uuids':question_uuids
     }
 
-    print(dataset['q'][0])
-    print(dataset['q_uuids'][0])
-    print(dataset['c'][0])
-
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
     model = du.choose_model(embeddings=embeddings)
 
     with tf.Session() as sess:
         du.restore_model(session=sess, run_id=FLAGS.run_id)
-        pred = model.predict_on_batch(sess=sess, data_batch=dataset)
         answers = generate_answers(sess, model, dataset, rev_vocab=rev_vocab)
 
         # write to json file to root dir
