@@ -64,12 +64,12 @@ def read_dataset(dataset, tier, vocab):
             context = context.replace("''", '" ')
             context = context.replace("``", '" ')
 
-            context_tokens = tokenize(context)
+            context_tokens, _, _ = tokenize(context, tokenizer=FLAGS.tokenizer)
 
             qas = article_paragraphs[pid]['qas']
             for qid in range(len(qas)):
                 question = qas[qid]['question']
-                question_tokens = tokenize(question)
+                question_tokens, _, _ = tokenize(question, tokenizer=FLAGS.tokenizer)
                 question_uuid = qas[qid]['id']
 
                 context_ids = [str(vocab.get(w, qa_data.UNK_ID)) for w in context_tokens]
