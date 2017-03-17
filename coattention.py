@@ -81,7 +81,7 @@ class CoattentionModel():
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=False)
+        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=FLAGS.embedding_trainable)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
