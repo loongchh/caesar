@@ -167,6 +167,8 @@ class CoattentionModel():
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
         (Q_embed, D_embed) = self.add_embedding()
+        s = []
+        e = []
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
@@ -189,8 +191,6 @@ class CoattentionModel():
             assert_shape(q_sen, "q_sen", [None, FLAGS.state_size])
             
             D_list = []
-            s = []
-            e = []
             tf.while_loop(lambda i: tf.less(i, tf.shape(D)[0]), \
                 lambda x: self.summarize(x, D, q_sen, D_list, s, e, debug), [tf.constant(0)])
 
@@ -315,7 +315,7 @@ class CoattentionModel():
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_no_softmax = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
-                beta_k = tf.nn.softmax(beta_b4_softmax)
+                beta_k = tf.nn.softmax(beta_no_softmax)
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
