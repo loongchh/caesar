@@ -107,7 +107,7 @@ def load_dataset(type='train', plot=False, debug=False):
     questions, contexts, sentences, spans, ground_truth = filter_data(questions, contexts, sentences, spans, ground_truth)
 
     if debug:
-        logger.debug("Filtered {} data, new size {}.".format(type, len(questions)))
+        logger.debug("Filtered {} data, new size {}".format(type, len(questions)))
     if plot:
         plot_histogram(contexts, "{}-contexts-filtered".format(type))
         plot_histogram(questions, "{}-questions-filtered".format(type))
@@ -296,5 +296,6 @@ if __name__ == '__main__':
     # exit()
     # train_data = load_dataset(type = "train", plot=True)
     val_data = load_dataset(type = "val")
-    print(val_data['s_s'][0])
-    print(val_data['s_s'][1])
+    for (key, val) in val_data.iteritems():
+        print(key)
+        print(np.array(val)[:5])

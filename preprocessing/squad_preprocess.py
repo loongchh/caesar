@@ -133,7 +133,7 @@ def read_write_dataset(dataset, tier, prefix):
          open(os.path.join(prefix, tier +'.question'), 'w') as question_file,\
          open(os.path.join(prefix, tier +'.answer'), 'w') as text_file, \
          open(os.path.join(prefix, tier +'.span'), 'w') as span_file,\
-         open(os.path.join(prefix, tier +'.context.sentences'), 'w') as sentence_file:
+         open(os.path.join(prefix, tier +'.context.sentence'), 'w') as sentence_file:
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
             article_paragraphs = dataset['data'][articles_id]['paragraphs']
@@ -190,10 +190,10 @@ def save_files(prefix, tier, indices):
      open(os.path.join(prefix, tier + '.question'), 'w') as question_file,\
      open(os.path.join(prefix, tier + '.answer'), 'w') as text_file, \
      open(os.path.join(prefix, tier + '.span'), 'w') as span_file, \
-     open(os.path.join(prefix, tier + '.context.sentences'), 'w') as sentence_file:
+     open(os.path.join(prefix, tier + '.context.sentence'), 'w') as sentence_file:
 
     for i in indices:
-      sentence_file.write(linecache.getline(os.path.join(prefix, 'train.context.sentences'), i))
+      sentence_file.write(linecache.getline(os.path.join(prefix, 'train.context.sentence'), i))
       context_file.write(linecache.getline(os.path.join(prefix, 'train.context'), i))
       question_file.write(linecache.getline(os.path.join(prefix, 'train.question'), i))
       text_file.write(linecache.getline(os.path.join(prefix, 'train.answer'), i))
