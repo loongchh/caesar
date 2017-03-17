@@ -273,7 +273,7 @@ class CoattentionModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-        return (betas, pred)
+        return (h, pred)
 
     ## ==============================
     ## ANSWER POINTER DECODER
@@ -314,13 +314,14 @@ class CoattentionModel():
                 v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
-                beta_k = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
+                beta_no_softmax = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
+                beta_k = tf.nn.softmax(beta_b4_softmax)
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
                 assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])
 
-                beta.append(beta_k)
+                beta.append(beta_no_softmax)
                 (_, ha) = cell(H_rbeta_k, ha)
 
             beta = tf.concat(1, beta)
