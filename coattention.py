@@ -275,14 +275,10 @@ class CoattentionModel():
             Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2 * FLAGS.state_size]), W1)
             Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_summary_size, 2])
             h = tf.transpose(Hr_W1 + b1, perm = [0,2,1])
-            betas = h
+            betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-<<<<<<< Updated upstream
-        return (h, pred)
-=======
-        return (betas, pred, s, e)
->>>>>>> Stashed changes
+        return (h, pred, s, e)
 
     ## ==============================
     ## ANSWER POINTER DECODER
@@ -324,16 +320,13 @@ class CoattentionModel():
                 
                 v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
-<<<<<<< Updated upstream
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_no_softmax = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 beta_k = tf.nn.softmax(beta_no_softmax)
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
-=======
                 # assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_k = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 # assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
->>>>>>> Stashed changes
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
                 # assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])

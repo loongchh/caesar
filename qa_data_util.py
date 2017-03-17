@@ -187,9 +187,12 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
     
     if sentences:
         n_sentence = []
+        # print(sentences)
         for sentence_span in sentences:
             if sentence_span[-1] >= max_length:
                 sentence_span = [s for s in sentence_span if s < max_length]
+            else:
+                
             n_sentence.append(len(sentence_span))
             sentence_span.append(max_length)
             sentence_span += [-1] * (max_length + 1 - len(sentence_span))
@@ -279,8 +282,8 @@ def test_get_batch():
 
 if __name__ == '__main__':
     parse_args.parse_args()
-    test_get_batch()
-    exit()
+    # test_get_batch()
+    # exit()
     embeddings = load_embeddings()
     vocab, rev_vocab = initialize_vocab()
     # for word in vocab:
@@ -294,4 +297,6 @@ if __name__ == '__main__':
     # print embeddings[vocab['Who']]
     # exit()
     # train_data = load_dataset(type = "train", plot=True)
-    val_data = load_dataset(type = "val", plot=True)
+    val_data = load_dataset(type = "val")
+    print(val_data['s_s'][0])
+    print(val_data['s_s'][1])
