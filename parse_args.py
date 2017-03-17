@@ -12,7 +12,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("batch_size", 40, "Batch size to use during training.")
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
-    tf.app.flags.DEFINE_string("tokenizer", "NLTK", "NLTK/CORE-NLP")
+    tf.app.flags.DEFINE_string("tokenizer", "CORE-NLP", "NLTK/CORE-NLP")
     tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
