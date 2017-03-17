@@ -41,6 +41,8 @@ class CoattentionModel():
                                                           name="sentence_number_placeholder")
         self.answer_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                           name="answer_sentence_placeholder")
+        self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+                                               name="span_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
                                                  name="answer_placeholder")
         self.answer_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_answer_size),
@@ -84,7 +86,7 @@ class CoattentionModel():
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
 
-    def summarize(self, x, D, q_sen, debug=False):
+    def summarize(self, x, D, q_sen, s, e, debug=False):
         # sentences = []
         sen_len = []
         sen_rep = []
@@ -157,18 +159,19 @@ class CoattentionModel():
         len_b4_summary = tf.reduce_sum(sen_len_summary)
         # len_b4_document = sum(sen_len[:ans_sen_order])
         # len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_sen_order))
-        self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
-        self.span_placeholder[x, 1] += len_b4_summary - len_b4_document
+        # self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
+        # self.span_placeholder[x, 1] += len_b4_summary - len_b4_document
+        s.append(self.span_placeholder[x, 0] + len_b4_summary - len_b4_document)
+        e.append(self.span_placeholder[x, 1] + len_b4_summary - len_b4_document)
 
-        if debug:
-            return (D_summary, 0 if self.span_placeholder[x, 0] >= FLAGS.max_summary_size else 1)
-
-        return (D_summary, )
+        return (D_summary, s, e)
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
         (Q_embed, D_embed) = self.add_embedding()
+        s = []
+        e = []
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
@@ -190,16 +193,15 @@ class CoattentionModel():
 
             assert_shape(q_sen, "q_sen", [None, FLAGS.state_size])
             
-            n_success = 0
-            D_all = []
+            D_list = []
             for x in range(FLAGS.batch_size):
-                (D_summary, successes) = self.summarize(x, D, q_sen, debug)
-                D_all.append(D_summary)
-                if debug:
-                    n_success += successes
+                (D_summary, s, e) = self.summarize(x, D, q_sen, s, e, debug)
+                D_list.append(D_summary)
 
-            D = tf.stack(D_all, axis=0)
-            assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
+            D = tf.stack(D_list, axis=0)
+            s = tf.stack(s, axis=0)
+            e = tf.stack(e, axis=0)
+            # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -212,10 +214,7 @@ class CoattentionModel():
             # Q = tf.tanh(Q + b_q)
 
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
-        if debug:
-            return (Q, D, n_success)
-
-        return (Q, D, )
+        return (Q, D, s, e)
 
     ## ==============================
     ## COATTENTION ENCODER
@@ -339,17 +338,23 @@ class CoattentionModel():
 
         return (beta, tf.argmax(beta, axis=2))
 
-    def cross_entropy_loss(self, decode, debug=False):
+    def cross_entropy_loss(self, decode, preprocessing, debug=False):
         beta = decode[0]
-        y = self.span_placeholder
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], y[:, 0]))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], y[:, 1]))
-        return (L1 + L2) / 2.
+        s = preprocessing[2]
+        e = preprocessing[3]
+        
+        if len(s) == 0:
+            s = self.span_placeholder[:, 0]
+            e = self.span_placeholder[:, 1]
+
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
+        return ((L1 + L2) / 2., tf.count_nonzero(s - FLAGS.max_summary_size))
 
     def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
 
-        gradients = optimizer.compute_gradients(loss)
+        gradients = optimizer.compute_gradients(loss[0])
         (grad, var) = zip(*gradients)
         (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
         
@@ -363,7 +368,7 @@ class CoattentionModel():
         grad_norm = tf.pack(grad_norm)
 
         train_op = optimizer.apply_gradients(zip(grad, var))
-        return (train_op, grad_norm, loss)
+        return (train_op, grad_norm, loss[0])
 
     def _build(self, debug):
         self.add_placeholders()
@@ -371,7 +376,7 @@ class CoattentionModel():
         self.encode = self.coattention_encode(self.preprocessing, debug)
         # self.decode = self.answer_pointer_decode(self.encode, debug)
         self.decode = self.feed_forward_decode(self.encode, debug)
-        self.loss = self.cross_entropy_loss(self.decode, debug)
+        self.loss = self.cross_entropy_loss(self.decode, self.preprocessing, debug)
         self.train_op = self.add_train_op(self.loss, debug)
 
     def debug(self, sess, data_batch):
@@ -388,8 +393,8 @@ class CoattentionModel():
 
     def summary_success(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
-        preprocessing_output = sess.run(util.tuple_to_list(*self.preprocessing), feed_dict=feed)
-        return preprocessing_output[2]
+        decode_output = sess.run(util.tuple_to_list(*self.loss), feed_dict=feed)
+        return decode_output[1]
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
