@@ -180,7 +180,7 @@ class CoattentionModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas,2)
 
-            answer_pointer_rep = (betas, pred)
+            answer_pointer_rep = (h, pred)
 
         return answer_pointer_rep
     ## ==============================
