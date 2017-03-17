@@ -86,15 +86,15 @@ class CoattentionModel():
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
 
-    def summarize(self, x, D, q_sen, s, e, debug=False):
+    def summarize(self, x, D, q_sen, D_list, s, e, debug=False):
         # sentences = []
         sen_len = []
         sen_rep = []
         n_sentence = self.sentence_number_placeholder[x]
 
-        def process_sentence(sen):
-            idx_from = self.sentence_span_placeholder[x, sen]  # sentence begin word index in document
-            idx_to = self.sentence_span_placeholder[x, sen + 1]  # sentence end word index in document
+        def process_sentence(i):
+            idx_from = self.sentence_span_placeholder[x, i]  # sentence begin word index in document
+            idx_to = self.sentence_span_placeholder[x, i + 1]  # sentence end word index in document
             sen_len.append(idx_to - idx_from + 1)
             
             # Sentence-level representation
@@ -103,7 +103,7 @@ class CoattentionModel():
                                                   else tf.reduce_mean(sentence, axis=0)
             assert_shape(rep, "rep", [FLAGS.state_size])
             sen_rep.append(rep)
-            return [sen + 1]
+            return [i + 1]
 
         tf.while_loop(lambda i: tf.less(i, n_sentence), process_sentence, [tf.constant(0)])
         sen_len = tf.stack(sen_len, axis=0)
@@ -138,6 +138,7 @@ class CoattentionModel():
         # assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
         D_summary = D_summary[:FLAGS.max_summary_size, :]
         # assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
+        D_list.append(D_summary)
 
         # Update answer span_placeholder to the index in summary
         # NOTE: If the answer is not located in a sentence in the summary, then the
@@ -164,14 +165,12 @@ class CoattentionModel():
         s.append(self.span_placeholder[x, 0] + len_b4_summary - len_b4_document)
         e.append(self.span_placeholder[x, 1] + len_b4_summary - len_b4_document)
 
-        return (D_summary, s, e)
+        return [x + 1]
 
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
         (Q_embed, D_embed) = self.add_embedding()
-        s = []
-        e = []
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
@@ -194,13 +193,17 @@ class CoattentionModel():
             assert_shape(q_sen, "q_sen", [None, FLAGS.state_size])
             
             D_list = []
-            for x in range(FLAGS.batch_size):
-                (D_summary, s, e) = self.summarize(x, D, q_sen, s, e, debug)
-                D_list.append(D_summary)
+            s = []
+            e = []
+            tf.while_loop(lambda i: tf.less(i, tf.shape(D)[0]), \
+                lambda x: self.summarize(x, D, q_sen, D_list, s, e, debug), [tf.constant(0)])
+            # for x in range(FLAGS.batch_size):
+            #     (D_summary, s, e) = self.summarize(x, D, q_sen, debug)
+            #     s.append(s)
+            #     e.append(e)
+            #     D_list.append(D_summary)
 
             D = tf.stack(D_list, axis=0)
-            s = tf.stack(s, axis=0)
-            e = tf.stack(e, axis=0)
             # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
@@ -213,6 +216,8 @@ class CoattentionModel():
             Q = tf.tanh(tf.map_fn(lambda x: tf.matmul(x, W_q) + b_q, Q))
             # Q = tf.tanh(Q + b_q)
 
+        s = tf.stack(s, axis=0)
+        e = tf.stack(e, axis=0)
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         return (Q, D, s, e)
 
@@ -224,13 +229,13 @@ class CoattentionModel():
 
         # Affinity matrix.
         L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
-        assert_shape(L, "L", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
+        # assert_shape(L, "L", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
 
         # Normalize with respect to question/document.
         # A_q = tf.map_fn(lambda x: tf.nn.softmax(x), L, dtype=tf.float32)
-        # assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
+        assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
         # A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
-        # assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
+        assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
         A_q = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), L, dtype=tf.float32)
         assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
         A_d = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
@@ -324,7 +329,7 @@ class CoattentionModel():
                 v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
-                beta_k = tf.nn.softmax(v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size]))
+                beta_k = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
@@ -343,13 +348,13 @@ class CoattentionModel():
         s = preprocessing[2]
         e = preprocessing[3]
         
-        if len(s) == 0:
+        if FLAGS.max_summary_size >= FLAGS.max_document_size:
             s = self.span_placeholder[:, 0]
             e = self.span_placeholder[:, 1]
 
-        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
-        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
-        return ((L1 + L2) / 2., tf.count_nonzero(s - FLAGS.max_summary_size))
+        loss1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
+        loss2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
+        return (loss1 + loss2, tf.count_nonzero(s - FLAGS.max_summary_size))
 
     def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
@@ -374,8 +379,8 @@ class CoattentionModel():
         self.add_placeholders()
         self.preprocessing = self.contextual_preprocessing(debug)
         self.encode = self.coattention_encode(self.preprocessing, debug)
-        # self.decode = self.answer_pointer_decode(self.encode, debug)
-        self.decode = self.feed_forward_decode(self.encode, debug)
+        self.decode = self.answer_pointer_decode(self.encode, debug)
+        # self.decode = self.feed_forward_decode(self.encode, debug)
         self.loss = self.cross_entropy_loss(self.decode, self.preprocessing, debug)
         self.train_op = self.add_train_op(self.loss, debug)
 
