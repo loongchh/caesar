@@ -191,8 +191,6 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
         for sentence_span in sentences:
             if sentence_span[-1] >= max_length:
                 sentence_span = [s for s in sentence_span if s < max_length]
-            else:
-                
             n_sentence.append(len(sentence_span))
             sentence_span.append(max_length)
             sentence_span += [-1] * (max_length + 1 - len(sentence_span))
