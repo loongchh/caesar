@@ -78,30 +78,27 @@ def list_topics(data):
     return list_topics
 
 
-def tokenize(sequence, tokenizer="nltk"):
-    if tokenizer.lower() == "core-nlp":
+def tokenize(sequence, tokenizer="CORE-NLP"):
+    if tokenizer == "CORE-NLP":
         output = nlp.annotate(sequence.encode('utf-8'), properties={'annotators': 'tokenize,ssplit','outputFormat': 'json'})
+
+        # !! hardcoded condition for one of the training example.. need better solution for dev/test data handling !!
         if isinstance(output, unicode):
             output = json.loads(output[:1543]+output[1544:1652]+output[1654:])
         tokens = []
+        sentences_start_indices = []
+        char_idx_to_token_idx_map = {}
+        token_count = 0
         for i in range(len(output['sentences'])):
-            tokens += [t['word'].encode('utf-8') for t in output['sentences'][i]['tokens']]
-
-        return tokens
-    elif tokenizer.lower() == "sentence":
-        sentences = nltk.sent_tokenize(sequence)
-        tokens = []
-        sentence_span = [0]
-        for sen in sentences:
-            tokens += [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sen)]
-            sentence_span.append(len(tokens))
-
-        sentence_span = [str(s) for s in sentence_span]
-        return tokens, sentence_span
+            sentences_start_indices.append(token_count)
+            for t in output['sentences'][i]['tokens']:
+                char_idx_to_token_idx_map[t['characterOffsetBegin']] = token_count
+                tokens.append(t['word'].encode('utf-8').replace("``", '"').replace("''", '"'))
+                token_count += 1
+        return tokens, char_idx_to_token_idx_map, sentences_start_indices
     else:
         tokens = [token.replace("``", '"').replace("''", '"') for token in nltk.word_tokenize(sequence)]
-        tokens = map(lambda x:x.encode('utf8'), tokens)
-        return tokens
+        return map(lambda x:x.encode('utf8'), tokens), {}, []
 
 
 def token_idx_map(context, context_tokens):
@@ -135,11 +132,8 @@ def read_write_dataset(dataset, tier, prefix):
     with open(os.path.join(prefix, tier +'.context'), 'w') as context_file,  \
          open(os.path.join(prefix, tier +'.question'), 'w') as question_file,\
          open(os.path.join(prefix, tier +'.answer'), 'w') as text_file, \
-         open(os.path.join(prefix, tier +'.span'), 'w') as span_file, \
-         open(os.path.join(prefix, tier +'.context.sentence'), 'w') as sentence_file:
-
-
-        print(len(dataset['data']))
+         open(os.path.join(prefix, tier +'.span'), 'w') as span_file,\
+         open(os.path.join(prefix, tier +'.context.sentences'), 'w') as sentence_file:
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
             article_paragraphs = dataset['data'][articles_id]['paragraphs']
@@ -150,44 +144,42 @@ def read_write_dataset(dataset, tier, prefix):
                 context = context.replace("''", '" ')
                 context = context.replace("``", '" ')
 
-                context_tokens, sentence_span = tokenize(context, tokenizer="sentence")
-                answer_map = token_idx_map(context, context_tokens)
+                context_tokens, context_char_idx_to_token_idx_map, sentences_start_indices = tokenize(context)
 
                 qas = article_paragraphs[pid]['qas']
                 for qid in range(len(qas)):
                     question = qas[qid]['question']
-                    question_tokens = tokenize(question)
+                    question_tokens, _, _ = tokenize(question)
 
-                    answers = qas[qid]['answers']
                     qn += 1
 
-                    num_answers = range(1)
+                    num_answers = range(len(qas[qid]['answers']))
 
                     for ans_id in num_answers:
                         # it contains answer_start, text
                         text = qas[qid]['answers'][ans_id]['text']
-                        # a_s = qas[qid]['answers'][ans_id]['answer_start']
+                        a_s = qas[qid]['answers'][ans_id]['answer_start']
 
-                        text_tokens = tokenize(text)
-                        answer_start = qas[qid]['answers'][ans_id]['answer_start']
-                        answer_end = answer_start + len(text)
-                        last_word_answer = len(text_tokens[-1]) # add one to get the first char
+                        text_tokens, _, _ = tokenize(text)
+
+                        answer_start_char_idx = qas[qid]['answers'][ans_id]['answer_start']
 
                         try:
-                            a_start_idx = answer_map[answer_start][1]
-                            a_end_idx = answer_map[answer_end - last_word_answer][1]
+                            span_start = context_char_idx_to_token_idx_map[answer_start_char_idx]
+                            span_end = span_start + len(text_tokens) -1
 
-                            # remove length restraint since we deal with it later
                             context_file.write(' '.join(context_tokens) + '\n')
                             question_file.write(' '.join(question_tokens) + '\n')
                             text_file.write(' '.join(text_tokens) + '\n')
-                            span_file.write(' '.join([str(a_start_idx), str(a_end_idx)]) + '\n')
-                            sentence_file.write(' '.join(sentence_span) + '\n')
-
+                            span_file.write(' '.join([str(span_start), str(span_end)]) + '\n')
+                            sentence_file.write(' '.join([str(sentence_start_id) for sentence_start_id in sentences_start_indices]) + '\n')
                         except Exception as e:
-                            skipped += 1
-
+                            if ans_id == len(qas[qid]['answers'])-1:
+                                skipped += 1
+                                print(str(skipped) + "/" + str(an))
+                                continue
                         an += 1
+                        break
 
     print("Skipped {} question/answer pairs in {}".format(skipped, tier))
     return qn,an
@@ -195,17 +187,17 @@ def read_write_dataset(dataset, tier, prefix):
 
 def save_files(prefix, tier, indices):
   with open(os.path.join(prefix, tier + '.context'), 'w') as context_file,  \
-       open(os.path.join(prefix, tier + '.question'), 'w') as question_file,\
-       open(os.path.join(prefix, tier + '.answer'), 'w') as text_file, \
-       open(os.path.join(prefix, tier + '.span'), 'w') as span_file, \
-       open(os.path.join(prefix, tier +'.context.sentence'), 'w') as sentence_file:
+     open(os.path.join(prefix, tier + '.question'), 'w') as question_file,\
+     open(os.path.join(prefix, tier + '.answer'), 'w') as text_file, \
+     open(os.path.join(prefix, tier + '.span'), 'w') as span_file, \
+     open(os.path.join(prefix, tier + '.context.sentences'), 'w') as sentence_file:
 
     for i in indices:
+      sentence_file.write(linecache.getline(os.path.join(prefix, 'train.context.sentences'), i))
       context_file.write(linecache.getline(os.path.join(prefix, 'train.context'), i))
       question_file.write(linecache.getline(os.path.join(prefix, 'train.question'), i))
       text_file.write(linecache.getline(os.path.join(prefix, 'train.answer'), i))
       span_file.write(linecache.getline(os.path.join(prefix, 'train.span'), i))
-      sentence_file.write(linecache.getline(os.path.join(prefix, 'train.context.sentence'), i))
 
 
 def split_tier(prefix, train_percentage = 0.9, shuffle=False):
