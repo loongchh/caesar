@@ -176,7 +176,7 @@ def read_write_dataset(dataset, tier, prefix):
                         except Exception as e:
                             if ans_id == len(qas[qid]['answers'])-1:
                                 skipped += 1
-                                print(str(skipped) + "/" + str(an))
+                                # print(str(skipped) + "/" + str(an))
                                 continue
                         an += 1
                         break
@@ -255,7 +255,7 @@ if __name__ == '__main__':
 
     # In dev, we have 10k+ questions, and around 3 answers per question (totaling
     # around 34k+ answers).
-    # dev_data = data_from_json(os.path.join(download_prefix, dev_filename))
-    # list_topics(dev_data)
-    # dev_num_questions, dev_num_answers = read_write_dataset(dev_data, 'dev', data_prefix)
-    # print("Processed {} questions and {} answers in dev".format(dev_num_questions, dev_num_answers))
+    dev_data = data_from_json(os.path.join(download_prefix, dev_filename))
+    list_topics(dev_data)
+    dev_num_questions, dev_num_answers = read_write_dataset(dev_data, 'dev', data_prefix)
+    print("Processed {} questions and {} answers in dev".format(dev_num_questions, dev_num_answers))
