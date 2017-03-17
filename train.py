@@ -160,9 +160,8 @@ def train():
 
             # train_writer.close()
 
-    # logger.info("Model did not crash!")
-    # logger.info("Passed!")
-    logger.info(FLAGS.comment)
+    logger.info("Training finished.")
+    logger.info(vars(FLAGS))
 
 
 def make_training_plots(losses, grad_norms, F1s, EMs, run_id):
@@ -308,3 +307,4 @@ if __name__ == "__main__":
         if FLAGS.max_summary_size < FLAGS.max_document_size:
             test_summary_size()
     train()
+

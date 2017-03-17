@@ -3,7 +3,7 @@ import tensorflow as tf
 def parse_args():
     # model
     tf.app.flags.DEFINE_string("model","coattention", "coattention/match_lstm/match_lstm_boundry")
-    tf.app.flags.DEFINE_string("run_id","model1", "model run id, eg. 2017-03-15-01-51-39")
+    tf.app.flags.DEFINE_string("run_id","model_2_nltk_trained", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
     tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
@@ -12,7 +12,8 @@ def parse_args():
     tf.app.flags.DEFINE_integer("batch_size", 40, "Batch size to use during training.")
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained vocabulary.")
-    tf.app.flags.DEFINE_string("glove_crawl_size", "840B", "Crawl size of embeddings")
+    tf.app.flags.DEFINE_string("tokenizer", "NLTK", "NLTK/CORE-NLP")
+    tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
     tf.app.flags.DEFINE_integer("max_document_size", 300, "")
@@ -40,7 +41,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 1, "Print predicted text after every n epochs")
-    tf.app.flags.DEFINE_integer("cluster_mode", 0, "Print predicted text after every n epochs")
+    tf.app.flags.DEFINE_integer("cluster_mode", 1, "Print predicted text after every n epochs")
     # tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")
     # tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 
