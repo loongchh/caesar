@@ -189,9 +189,11 @@ def save_files(prefix, tier, indices):
   with open(os.path.join(prefix, tier + '.context'), 'w') as context_file,  \
      open(os.path.join(prefix, tier + '.question'), 'w') as question_file,\
      open(os.path.join(prefix, tier + '.answer'), 'w') as text_file, \
-     open(os.path.join(prefix, tier + '.span'), 'w') as span_file:
+     open(os.path.join(prefix, tier + '.span'), 'w') as span_file, \
+     open(os.path.join(prefix, tier + '.context.sentences'), 'w') as sentence_file:
 
     for i in indices:
+      sentence_file.write(linecache.getline(os.path.join(prefix, 'train.context.sentences'), i))
       context_file.write(linecache.getline(os.path.join(prefix, 'train.context'), i))
       question_file.write(linecache.getline(os.path.join(prefix, 'train.question'), i))
       text_file.write(linecache.getline(os.path.join(prefix, 'train.answer'), i))
