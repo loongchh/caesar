@@ -278,7 +278,11 @@ class CoattentionModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
+<<<<<<< HEAD
         return (h, pred, s, e)
+=======
+            answer_pointer_rep = (h, pred)
+>>>>>>> kshitiz-pa4
 
     ## ==============================
     ## ANSWER POINTER DECODER
