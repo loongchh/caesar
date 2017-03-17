@@ -41,8 +41,6 @@ def setup_args():
     parser.set_defaults(random_init=True)
     parser.add_argument('--include_dev', dest='include_dev', action='store_true')
     parser.set_defaults(include_dev=False)
-    parser.add_argument('--parallel', dest='parallel', action='store_true')
-    parser.set_defaults(parallel=False)
     return parser.parse_args()
 
 
@@ -171,9 +169,9 @@ if __name__ == '__main__':
     dev_path = pjoin(args.source_dir, "dev")
 
     data_paths = [pjoin(args.source_dir, "train.context"),
-                       pjoin(args.source_dir, "train.question"),
-                       pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question")]
+                  pjoin(args.source_dir, "train.question"),
+                  pjoin(args.source_dir, "val.context"),
+                  pjoin(args.source_dir, "val.question")]
 
     if args.include_dev:
         data_paths += [pjoin(args.source_dir, "dev.context"), 
@@ -198,6 +196,7 @@ if __name__ == '__main__':
     y_train_ids_path = train_path + ".ids.question"
     data_to_token_ids(train_path + ".context", x_train_dis_path, vocab_path)
     data_to_token_ids(train_path + ".question", y_train_ids_path, vocab_path)
+    
     x_dis_path = valid_path + ".ids.context"
     y_ids_path = valid_path + ".ids.question"
     data_to_token_ids(valid_path + ".context", x_dis_path, vocab_path)
