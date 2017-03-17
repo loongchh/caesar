@@ -37,6 +37,8 @@ class CoattentionModel():
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
         self.sentence_span_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1),
                                                         name="sentence_span_placeholder")
+        self.sentence_number_placeholder = tf.placeholder(tf.int32, shape=(None),
+                                                          name="sentence_number_placeholder")
         self.answer_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                           name="answer_sentence_placeholder")
         self.answer_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_answer_size),
@@ -61,6 +63,8 @@ class CoattentionModel():
             feed_dict[self.dropout_placeholder] = dropout
         if 's_s' in data_batch and data_batch['s_s'] is not None:
             feed_dict[self.sentence_span_placeholder] = data_batch['s_s']
+        if 's_n' in data_batch and data_batch['s_n'] is not None:
+            feed_dict[self.sentence_number_placeholder] = data_batch['s_n']
         if 'an_s' in data_batch and data_batch['an_s'] is not None:
             feed_dict[self.answer_sentence_placeholder] = data_batch['an_s']
         if 's' in data_batch and data_batch['s'] is not None:
@@ -81,54 +85,78 @@ class CoattentionModel():
         return question_embeddings, document_embeddings
 
     def summarize(self, x, D, q_sen, debug=False):
-        sentences = []
+        # sentences = []
         sen_len = []
         sen_rep = []
-        n_sentence = 0  # number of sentences in document
+        n_sentence = self.sentence_number_placeholder[x]
 
-        for sen in range(FLAGS.max_document_size + 1):
-            idx_from = tf.sentence_span_placeholder(x)  # sentence begin word index in document
-            idx_to = tf.sentence_span_placeholder(x + 1)  # sentence end word index in document
-            if idx_to < 0:  # this is no longer a sentence
-                break
-
-            sentences.append(D[x, idx_from:idx_to, :])
-            sen_len.append(idx_to + 1 - idx_from)
-            n_sentence += 1
+        def process_sentence(sen):
+            idx_from = self.sentence_span_placeholder[x, sen]  # sentence begin word index in document
+            idx_to = self.sentence_span_placeholder[x, sen + 1]  # sentence end word index in document
+            sen_len.append(idx_to - idx_from + 1)
             
             # Sentence-level representation
-            rep = tf.reduce_max(sentences[-1], axis=0) if FLAGS.model.lower() == "max" \
-                                                       else tf.reduce_mean(sentences[-1], axis=0)
+            sentence = D[x, idx_from:idx_to, :]
+            rep = tf.reduce_max(sentence, axis=0) if FLAGS.model.lower() == "max" \
+                                                  else tf.reduce_mean(sentence, axis=0)
             assert_shape(rep, "rep", [FLAGS.state_size])
             sen_rep.append(rep)
+            return [sen + 1]
+
+        tf.while_loop(lambda i: tf.less(i, n_sentence), process_sentence, [tf.constant(0)])
+        sen_len = tf.stack(sen_len, axis=0)
         
         # Normalized sentence-level representation
         sen_rep = tf.stack(sen_rep, axis=0)
-        assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
+        # assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
         sen_rep /= tf.sqrt(tf.reduce_sum(tf.square(sen_rep), axis=1, keep_dims=True))
-        assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
+        # assert_shape(sen_rep, "sen_rep", [n_sentence, FLAGS.state_size])
 
         # Similarity between the question rep and each sentence rep
-        sen_sim = tf.matmul(q_sen[x, :], tf.transpose(sen_rep))
-        assert_shape(sen_sim, "sen_sim", [n_sentence])
+        sen_sim = tf.matmul(tf.expand_dims(q_sen[x, :], 0), tf.transpose(sen_rep))
+        # assert_shape(sen_sim, "sen_sim", [n_sentence])
 
+        sen_sorted = []
         # Reorder sentence in document, then truncate doc to the maximum summary length
         (_, sen_sim_idx) = tf.nn.top_k(sen_sim, k=n_sentence)
-        sen_sorted = [sentences[i] for i in sen_sim_idx]
-        sen_sorted.append(D[x, idx_from:, :])  # Non-empty if padding is in document
-        D_summary = tf.concat(0, sen_sorted)
-        assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
-        D_summary = D_summary[:FLAGS.max_summary_size, :]
-        assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
+        sen_sim_idx = tf.squeeze(sen_sim_idx)
 
-        # Update answer span_placeholder the to the index in summary
+        def sort_sentence(i):
+            sen = sen_sim_idx[i]
+            idx_from = self.sentence_span_placeholder[x, sen]  # sentence begin word index in document
+            idx_to = self.sentence_span_placeholder[x, sen + 1]  # sentence end word index in document
+            sen_sorted.append(D[x, idx_from:idx_to, :])
+            return [i + 1]
+
+        tf.while_loop(lambda i: tf.less(i, n_sentence), sort_sentence, [tf.constant(0)])
+        # sen_sorted = [sentences[i] for i in sen_sim_idx]
+        padding_from = self.sentence_span_placeholder[x, n_sentence]
+        sen_sorted.append(D[x, padding_from:, :])  # Non-empty if padding is in document
+        D_summary = tf.concat(0, sen_sorted)
+        # assert_shape(D_summary, "D_summary", [FLAGS.max_document_size, FLAGS.state_size])
+        D_summary = D_summary[:FLAGS.max_summary_size, :]
+        # assert_shape(D_summary, "D_summary", [FLAGS.max_summary_size, FLAGS.state_size])
+
+        # Update answer span_placeholder to the index in summary
         # NOTE: If the answer is not located in a sentence in the summary, then the
         #       eventual calculated span would be larger than FLAGS.max_summary_size and
         #       result in NaN during cross entropy calculation. This is remedied by
         #       ignoring NaN values when averaging the loss.
-        ans_sen_order = np.argmax(sen_sim_idx == self.answer_sentence_placeholder[x])
-        len_b4_document = sum(sen_len[:ans_sen_order])
-        len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_sen_order))
+        ans_sen_order = tf.where(tf.equal(sen_sim_idx, self.answer_sentence_placeholder[x]))[0, 0]
+        ans_sen_order = tf.cast(ans_sen_order, tf.int32)
+
+        sen_len_document = []
+        sen_len_summary = []
+        def get_sentence_length(x):
+            sen_len_document.append(sen_len[x])
+            sen_len_summary.append(sen_len[sen_sim_idx[x]])
+            return [x + 1]
+
+        tf.while_loop(lambda i: tf.less(i, ans_sen_order), get_sentence_length, [tf.constant(0)])
+        len_b4_document = tf.reduce_sum(sen_len_document)
+        len_b4_summary = tf.reduce_sum(sen_len_summary)
+        # len_b4_document = sum(sen_len[:ans_sen_order])
+        # len_b4_summary = sum(sen_len[sen_sim_idx[i]] for i in range(ans_sen_order))
         self.span_placeholder[x, 0] += len_b4_summary - len_b4_document
         self.span_placeholder[x, 1] += len_b4_summary - len_b4_document
 
@@ -153,26 +181,25 @@ class CoattentionModel():
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
         if FLAGS.max_summary_size < FLAGS.max_document_size:
-            if FLAGS.model.lower() == "max":
+            if FLAGS.pool_type.lower() == "max":
                 q_sen = tf.reduce_max(Q, axis=1)
-            elif FLAGS.model.lower() == "mean":
+            elif FLAGS.pool_type.lower() == "mean":
                 q_sen = tf.reduce_mean(Q, axis=1)
             else:
                 q_sen = None
 
-            assert_shape(q_sen, "Q_sen", [None, FLAGS.state_size])
-            D = tf.map_fn(lambda x: self.summarize(x, D, q_sen, debug)[0], range(D.shape[0]), dtype=tf.float32)
-            if debug:
-                n_success = 0
-                D_all = []
-                for x in range(range(D.shape[0]))
-                    (D_summary, successes) = self.summarize(x, D, q_sen, debug)
+            assert_shape(q_sen, "q_sen", [None, FLAGS.state_size])
+            
+            n_success = 0
+            D_all = []
+            for x in range(FLAGS.batch_size):
+                (D_summary, successes) = self.summarize(x, D, q_sen, debug)
+                D_all.append(D_summary)
+                if debug:
                     n_success += successes
-                    D_all.append(D_summary)
-                D = tf.stack(D_all, axis[0])
 
+            D = tf.stack(D_all, axis=0)
             assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
-                
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):

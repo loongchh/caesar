@@ -55,7 +55,7 @@ def copyToHDFS(local_dir, hdfs_dir):
 
 
 def load_embeddings():
-    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed{}.{}.npz".format(FLAGS.glove_crawl_size, FLAGS.embedding_size))
+    embed_path = FLAGS.embed_path or pjoin("data", "squad", "glove.trimmed.{}.{}.npz".format(FLAGS.glove_crawl_size, FLAGS.embedding_size))
     embeddings = np.load(embed_path)['glove']
     embeddings=embeddings.astype(np.float32)
 
@@ -114,7 +114,7 @@ def load_dataset(type='train', plot=False, debug=False):
         plot_histogram(ground_truth, "{}-answers-filtered".format(type))
 
     questions, questions_mask, questions_seq = padding(questions, FLAGS.max_question_size)
-    contexts, contexts_mask, contexts_seq, sentence_span, answer_span = padding(contexts, FLAGS.max_document_size, sentences=sentences, spans=spans)
+    contexts, contexts_mask, contexts_seq, sentence_span, n_sentence, answer_span = padding(contexts, FLAGS.max_document_size, sentences=sentences, spans=spans)
     answers, answers_mask, answers_seq = padding(ground_truth,FLAGS.max_answer_size, zero_vector=FLAGS.max_document_size)
 
     if plot:
@@ -130,6 +130,7 @@ def load_dataset(type='train', plot=False, debug=False):
         'c_m': contexts_mask,
         'c_s': contexts_seq,
         's_s': sentence_span,
+        's_n': n_sentence,
         'an_s': answer_span,
         's': spans,
         'gt': ground_truth,
@@ -185,9 +186,11 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
     data = [record[:] + (max_length - len(record))*[zero_vector] for record in data]
     
     if sentences:
+        n_sentence = []
         for sentence_span in sentences:
             if sentence_span[-1] >= max_length:
                 sentence_span = [s for s in sentence_span if s < max_length]
+            n_sentence.append(len(sentence_span))
             sentence_span.append(max_length)
             sentence_span += [-1] * (max_length + 1 - len(sentence_span))
 
@@ -198,7 +201,7 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
             except StopIteration as si:
                 answer_span.append(-1)
 
-        return data, mask, seq, sentences, answer_span
+        return data, mask, seq, sentences, n_sentence, answer_span
 
     return data, mask, seq
 

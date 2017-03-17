@@ -11,8 +11,8 @@ def parse_args():
     tf.app.flags.DEFINE_float("dropout", 0.15, "Fraction of units randomly dropped on non-recurrent connections.")
     tf.app.flags.DEFINE_integer("batch_size", 40, "Batch size to use during training.")
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
-    tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained vocabulary.")
-    tf.app.flags.DEFINE_string("glove_crawl_size", ".840B", "Crawl size of embeddings")
+    tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
+    tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
     tf.app.flags.DEFINE_integer("max_document_size", 300, "")
@@ -24,7 +24,7 @@ def parse_args():
     # Model Specific Parameters
     # Coattention
     tf.app.flags.DEFINE_integer("max_summary_size", 300, "Truncate the document to specific length.")
-    tf.app.flags.DEFINE_string("pool", "max", "Pooling mechanism used to summarize each sentence.")
+    tf.app.flags.DEFINE_string("pool_type", "max", "Pooling mechanism used to summarize each sentence.")
 
     # Directories
     tf.app.flags.DEFINE_string("vocab_path", "data/squad/vocab.dat", "Path to vocab file (default: ./data/squad/vocab.dat)")

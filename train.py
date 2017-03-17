@@ -298,12 +298,13 @@ def test_summary_size():
             successes.append(model.summary_success(sess=session, data_batch=data_batch))
             prog.update(i+1, [("successes", sum(successes))])
 
-        logger.debug("Summarization: %d out of %d answers are retained", sum(successes), int(len(train_data['q']))
+        logger.debug("Summarization: %d out of %d answers are retained", sum(successes), int(len(train_data['q'])))
         return sum(successes)
 
 if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug == 1:
         debug()
-        test_summary_size()
+        if FLAGS.max_summary_size < FLAGS.max_document_size:
+            test_summary_size()
     train()
