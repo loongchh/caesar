@@ -21,6 +21,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("max_question_size", 40, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
     tf.app.flags.DEFINE_integer("max_answer_size", 20, "")
+    tf.app.flags.DEFINE_bool("embedding_trainable", True, "Allow training of embedding vectors")
 
     # Model Specific Parameters
     # Coattention
