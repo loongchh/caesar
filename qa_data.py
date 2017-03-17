@@ -15,6 +15,7 @@ from tensorflow.python.platform import gfile
 from tqdm import *
 import numpy as np
 from os.path import join as pjoin
+import multiprocessing as mp
 
 _PAD = b"<pad>"
 _SOS = b"<sos>"
@@ -36,7 +37,12 @@ def setup_args():
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)
     parser.add_argument("--glove_crawl_size", default="840B")
-    parser.add_argument("--random_init", default=True, type=bool)
+    parser.add_argument('--no_random_init', dest='random_init', action='store_false')
+    parser.set_defaults(random_init=True)
+    parser.add_argument('--include_dev', dest='include_dev', action='store_true')
+    parser.set_defaults(include_dev=False)
+    parser.add_argument('--parallel', dest='parallel', action='store_true')
+    parser.set_defaults(parallel=False)
     return parser.parse_args()
 
 
@@ -59,6 +65,24 @@ def initialize_vocabulary(vocabulary_path):
     else:
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
+def process_glove_line(line):
+    found = 0
+    array = line.lstrip().rstrip().split(" ")
+    word = array[0]
+    vector = list(map(float, array[1:]))
+    if word in rev_vocab:
+        idx = rev_vocab.index(word)
+        glove[idx, :] = vector
+        found += 1
+    if word.capitalize() in rev_vocab:
+        idx = rev_vocab.index(word.capitalize())
+        glove[idx, :] = vector
+        found += 1
+    if word.upper() in rev_vocab:
+        idx = rev_vocab.index(word.upper())
+        glove[idx, :] = vector
+        found += 1
+    return found
 
 def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
     """
@@ -66,6 +90,7 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
     :return:
     """
     if not gfile.Exists(save_path + ".npz"):
+        global glove
         glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.glove_crawl_size, args.glove_dim))
         if random_init:
             glove = np.random.randn(len(vocab_list), args.glove_dim)
@@ -74,22 +99,15 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
         found = 0
         size = {"6B": 400000, "840B": 2196017}[args.glove_crawl_size]
         with open(glove_path, 'r') as fh:
-            for line in tqdm(fh, total=size):
-                array = line.lstrip().rstrip().split(" ")
-                word = array[0]
-                vector = list(map(float, array[1:]))
-                if word in vocab_list:
-                    idx = vocab_list.index(word)
-                    glove[idx, :] = vector
-                    found += 1
-                if word.capitalize() in vocab_list:
-                    idx = vocab_list.index(word.capitalize())
-                    glove[idx, :] = vector
-                    found += 1
-                if word.upper() in vocab_list:
-                    idx = vocab_list.index(word.upper())
-                    glove[idx, :] = vector
-                    found += 1
+            if args.parallel:
+                threads = mp.cpu_count()
+                print("Running with {:d} threads".format(threads))
+                pool = mp.Pool(processes=threads)
+                found = sum(pool.map(process_glove_line, fh))
+                pool.close()
+                pool.terminate()
+            else:
+                found = sum(process_glove_line(line) for line in tqdm(fh, total=size))
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
         np.savez_compressed(save_path, glove=glove)
@@ -152,17 +170,23 @@ if __name__ == '__main__':
     valid_path = pjoin(args.source_dir, "val")
     dev_path = pjoin(args.source_dir, "dev")
 
-    create_vocabulary(vocab_path,
-                      [pjoin(args.source_dir, "train.context"),
+    data_paths = [pjoin(args.source_dir, "train.context"),
                        pjoin(args.source_dir, "train.question"),
                        pjoin(args.source_dir, "val.context"),
-                       pjoin(args.source_dir, "val.question")],)
+                       pjoin(args.source_dir, "val.question")]
+
+    if args.include_dev:
+        data_paths += [pjoin(args.source_dir, "dev.context"), 
+                       pjoin(args.source_dir, "dev.question")]
+        
+    create_vocabulary(vocab_path, data_paths,)
     vocab, rev_vocab = initialize_vocabulary(pjoin(args.vocab_dir, "vocab.dat"))
 
     # ======== Trim Distributed Word Representation =======
     # If you use other word representations, you should change the code below
 
-    process_glove(args, rev_vocab, args.source_dir + "/glove.trimmed.{}.{}".format(args.glove_crawl_size, args.glove_dim),
+    glove_type = ".dev" if args.include_dev else ""
+    process_glove(args, rev_vocab, args.source_dir + "/glove.trimmed{}.{}.{}".format(glove_type, args.glove_crawl_size, args.glove_dim),
                   random_init=args.random_init)
 
     # ======== Creating Dataset =========
@@ -174,8 +198,13 @@ if __name__ == '__main__':
     y_train_ids_path = train_path + ".ids.question"
     data_to_token_ids(train_path + ".context", x_train_dis_path, vocab_path)
     data_to_token_ids(train_path + ".question", y_train_ids_path, vocab_path)
-
     x_dis_path = valid_path + ".ids.context"
     y_ids_path = valid_path + ".ids.question"
     data_to_token_ids(valid_path + ".context", x_dis_path, vocab_path)
     data_to_token_ids(valid_path + ".question", y_ids_path, vocab_path)
+
+    if args.include_dev:
+        x_dis_path = dev_path + ".ids.context"
+        y_ids_path = dev_path + ".ids.question"
+        data_to_token_ids(dev_path + ".context", x_dis_path, vocab_path)
+        data_to_token_ids(dev_path + ".question", y_ids_path, vocab_path)
