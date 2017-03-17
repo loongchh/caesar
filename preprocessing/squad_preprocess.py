@@ -89,7 +89,7 @@ def tokenize(sequence, tokenizer="CORE-NLP"):
         for i in range(len(output['sentences'])):
             for t in output['sentences'][i]['tokens']:
                 char_idx_to_token_idx_map[t['characterOffsetBegin']] = token_count;
-                tokens.append(t['word'].encode('utf-8'))
+                tokens.append(t['word'].encode('utf-8').replace("``", '"').replace("''", '"'))
                 token_count += 1
         return tokens, char_idx_to_token_idx_map
     else:
@@ -135,6 +135,7 @@ def read_write_dataset(dataset, tier, prefix):
          open(os.path.join(prefix, tier +'.span'), 'w') as span_file:
 
         print(len(dataset['data']))
+	print ("new code")
 
         for articles_id in tqdm(range(len(dataset['data'])), desc="Preprocessing {}".format(tier)):
             article_paragraphs = dataset['data'][articles_id]['paragraphs']
@@ -156,7 +157,7 @@ def read_write_dataset(dataset, tier, prefix):
                     answers = qas[qid]['answers']
                     qn += 1
 
-                    num_answers = range(1)
+                    num_answers = range(len(qas[qid]['answers']))
 
                     for ans_id in num_answers:
                         # it contains answer_start, text
@@ -166,26 +167,31 @@ def read_write_dataset(dataset, tier, prefix):
                         text_tokens, _ = tokenize(text)
 
                         answer_start_char_idx = qas[qid]['answers'][ans_id]['answer_start']
-                        span_start = context_char_idx_to_token_idx_map[answer_start_char_idx]
-                        span_end = span_start + len(text_tokens) -1
+			try:
+                            span_start = context_char_idx_to_token_idx_map[answer_start_char_idx]
+                            span_end = span_start + len(text_tokens) -1
 
-                        # print(context_tokens[span_start])
-                        # print(context_tokens[span_end])
-                        #
-                        # print(text_tokens)
-                        #
-                        # exit()
+                        	# print(context_tokens[span_start])
+                        	# print(context_tokens[span_end])
+                        	#
+                        	# print(text_tokens)
+                        	#
+                        	# exit()
 
-                        # remove length restraint since we deal with it later
-                        context_file.write(' '.join(context_tokens) + '\n')
-                        question_file.write(' '.join(question_tokens) + '\n')
-                        text_file.write(' '.join(text_tokens) + '\n')
-                        span_file.write(' '.join([str(span_start), str(span_end)]) + '\n')
+                        	# remove length restraint since we deal with it later
+                            context_file.write(' '.join(context_tokens) + '\n')
+                            question_file.write(' '.join(question_tokens) + '\n')
+                            text_file.write(' '.join(text_tokens) + '\n')
+                            span_file.write(' '.join([str(span_start), str(span_end)]) + '\n')
 
-                        # except Exception as e:
-                        #     skipped += 1
+                        except Exception as e:
+			    if ans_id == len(qas[qid]['answers'])-1:
+                            	skipped += 1
+			    	print(str(skipped) + "/" + str(an))
+			    continue
 
                         an += 1
+			break
 
     print("Skipped {} question/answer pairs in {}".format(skipped, tier))
     return qn,an
