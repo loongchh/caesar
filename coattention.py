@@ -344,13 +344,18 @@ class CoattentionModel():
         s = decode[2]
         e = decode[3]
         
-        if FLAGS.max_summary_size >= FLAGS.max_document_size:
+        if FLAGS.max_summary_size < FLAGS.max_document_size:
+            mask = tf.less(s, FLAGS.max_summary_size)
+            beta = tf.boolean_mask(beta, mask)
+            s = tf.boolean_mask(s, mask)
+            e = tf.boolean_mask(e, mask)
+        else:
             s = self.span_placeholder[:, 0]
             e = self.span_placeholder[:, 1]
 
-        loss1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
-        loss2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
-        return ((loss1 + loss2) / 2., tf.count_nonzero(s - FLAGS.max_summary_size))
+        L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
+        L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
+        return ((L1 + L2) / 2., tf.count_nonzero(s - FLAGS.max_summary_size))
 
     def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
