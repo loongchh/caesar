@@ -39,7 +39,7 @@ class CoattentionModel():
                                                         name="sentence_span_placeholder")
         self.sentence_number_placeholder = tf.placeholder(tf.int32, shape=(None),
                                                           name="sentence_number_placeholder")
-        self.answer_sentence_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
+        self.answer_sentence_placeholder = tf.placeholder(tf.int32, shape=(None),
                                                           name="answer_sentence_placeholder")
         self.span_placeholder = tf.placeholder(tf.int32, shape=(None, 2),
                                                name="span_placeholder")
@@ -231,9 +231,9 @@ class CoattentionModel():
         # assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
         # A_d = tf.map_fn(lambda x: tf.nn.softmax(x), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
         # assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
-        A_q = tf.map_fn(lambda x: tf.nn.softmax(x, axis=0), L, dtype=tf.float32)
+        A_q = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), L, dtype=tf.float32)
         assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
-        A_d = tf.map_fn(lambda x: tf.nn.softmax(x, axis=0), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
+        A_d = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
         assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
 
         # Attention of the document w.r.t question.
