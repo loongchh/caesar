@@ -195,7 +195,7 @@ class CoattentionModel():
                 lambda x: self.summarize(x, D, q_sen, D_list, s, e, debug), [tf.constant(0)])
 
             D = tf.stack(D_list, axis=0)
-            assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
+            # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -215,6 +215,8 @@ class CoattentionModel():
     def coattention_encode(self, preprocessing, debug=False):
         Q = preprocessing[0]
         D = preprocessing[1]
+        s = preprocessing[2]
+        e = preprocessing[3]
 
         # Affinity matrix.
         L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
@@ -222,23 +224,23 @@ class CoattentionModel():
 
         # Normalize with respect to question/document.
         A_q = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), L, dtype=tf.float32)
-        assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
+        # assert_shape(A_q, "A_q", [None, FLAGS.max_question_size, FLAGS.max_summary_size])
         A_d = tf.map_fn(lambda x: tf.nn.softmax(x, dim=0), tf.transpose(L, [0, 2, 1]), dtype=tf.float32)
-        assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
+        # assert_shape(A_d, "A_d", [None, FLAGS.max_summary_size, FLAGS.max_question_size])
 
         # Attention of the document w.r.t question.
         C_q = tf.batch_matmul(A_q, D)
-        assert_shape(C_q, "C_q", [None, FLAGS.max_question_size, FLAGS.state_size])
+        # assert_shape(C_q, "C_q", [None, FLAGS.max_question_size, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
         C_d = tf.concat(2, [tf.batch_matmul(A_d, Q), tf.batch_matmul(A_d, C_q)])
-        assert_shape(C_d, "C_d", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
+        # assert_shape(C_d, "C_d", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
 
         # Fusion of temporal information to the coattention context
         with tf.variable_scope("COATTENTION"):
             coatt = tf.concat(2, [D, C_d])
-            assert_shape(coatt, "coatt", [None, FLAGS.max_summary_size, 3 * FLAGS.state_size])
+            # assert_shape(coatt, "coatt", [None, FLAGS.max_summary_size, 3 * FLAGS.state_size])
             
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
@@ -246,13 +248,16 @@ class CoattentionModel():
                 sequence_length=self.document_seq_placeholder)
             U = tf.concat(2, U)
         
-        assert_shape(U, "U", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
-        return U
+        # assert_shape(U, "U", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
+        return (U, s, e)
 
     ## ==============================
     ## FEED FORWARD DECODER
     def feed_forward_decode(self, encode, debug=False):
-        Hr = encode
+        Hr = encode[0]
+        s = encode[1]
+        e = encode[2]
+
         with tf.variable_scope("Feed_Forward_Prediction"):
             W1 =tf.get_variable(name='W1',
                                shape = [2*FLAGS.state_size, 2],
@@ -270,16 +275,22 @@ class CoattentionModel():
             Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2 * FLAGS.state_size]), W1)
             Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_summary_size, 2])
             h = tf.transpose(Hr_W1 + b1, perm = [0,2,1])
-            betas = tf.nn.softmax(h)
+            betas = h
             pred = tf.argmax(betas, 2)
 
+<<<<<<< Updated upstream
         return (h, pred)
+=======
+        return (betas, pred, s, e)
+>>>>>>> Stashed changes
 
     ## ==============================
     ## ANSWER POINTER DECODER
     def answer_pointer_decode(self, encode, debug=False):
-        H_r = encode
-        assert_shape(H_r, "H_r", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
+        H_r = encode[0]
+        s = encode[1]
+        e = encode[2]
+        # assert_shape(H_r, "H_r", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope("answer_pointer_decode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
@@ -303,23 +314,29 @@ class CoattentionModel():
 
                 VH_r = tf.map_fn(lambda x: tf.matmul(x, V), H_r)
                 # VH_r = tf.einsum('ijk,kl->ijl', H_r, V)
-                assert_shape(VH_r, "VH_r", [None, FLAGS.max_summary_size, FLAGS.state_size])
+                # assert_shape(VH_r, "VH_r", [None, FLAGS.max_summary_size, FLAGS.state_size])
                 W_aH_ab_a = tf.matmul(ha[1], W_a) + b_a
-                assert_shape(W_aH_ab_a, "W_aH_ab_a", [None, FLAGS.state_size])
+                # assert_shape(W_aH_ab_a, "W_aH_ab_a", [None, FLAGS.state_size])
                 W_aH_ab_a = tf.expand_dims(W_aH_ab_a, axis=1)
                 F_k = tf.nn.tanh(VH_r + tf.tile(W_aH_ab_a, [1, FLAGS.max_summary_size, 1]))
                 F_k = tf.transpose(F_k, perm=[0, 2, 1])
-                assert_shape(F_k, "F_k", [None, FLAGS.state_size, FLAGS.max_summary_size])
+                # assert_shape(F_k, "F_k", [None, FLAGS.state_size, FLAGS.max_summary_size])
                 
                 v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
+<<<<<<< Updated upstream
                 assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_no_softmax = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 beta_k = tf.nn.softmax(beta_no_softmax)
                 assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
+=======
+                # assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
+                beta_k = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
+                # assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
+>>>>>>> Stashed changes
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
-                assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])
+                # assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])
 
                 beta.append(beta_no_softmax)
                 (_, ha) = cell(H_rbeta_k, ha)
@@ -327,12 +344,12 @@ class CoattentionModel():
             beta = tf.concat(1, beta)
             assert_shape(beta, "beta", [None, 2, FLAGS.max_summary_size])
 
-        return (beta, tf.argmax(beta, axis=2))
+        return (beta, tf.argmax(beta, axis=2), s, e)
 
-    def cross_entropy_loss(self, decode, preprocessing, debug=False):
+    def cross_entropy_loss(self, decode, debug=False):
         beta = decode[0]
-        s = preprocessing[2]
-        e = preprocessing[3]
+        s = decode[2]
+        e = decode[3]
         
         if FLAGS.max_summary_size >= FLAGS.max_document_size:
             s = self.span_placeholder[:, 0]
@@ -367,7 +384,7 @@ class CoattentionModel():
         self.encode = self.coattention_encode(self.preprocessing, debug)
         self.decode = self.answer_pointer_decode(self.encode, debug)
         # self.decode = self.feed_forward_decode(self.encode, debug)
-        self.loss = self.cross_entropy_loss(self.decode, self.preprocessing, debug)
+        self.loss = self.cross_entropy_loss(self.decode, debug)
         self.train_op = self.add_train_op(self.loss, debug)
 
     def debug(self, sess, data_batch):
