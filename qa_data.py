@@ -15,7 +15,6 @@ from tensorflow.python.platform import gfile
 from tqdm import *
 import numpy as np
 from os.path import join as pjoin
-import multiprocessing as mp
 
 _PAD = b"<pad>"
 _SOS = b"<sos>"
@@ -37,8 +36,7 @@ def setup_args():
     parser.add_argument("--vocab_dir", default=vocab_dir)
     parser.add_argument("--glove_dim", default=300, type=int)
     parser.add_argument("--glove_crawl_size", default="840B")
-    parser.add_argument('--no_random_init', dest='random_init', action='store_false')
-    parser.set_defaults(random_init=True)
+    parser.add_argument("--random_init", default=True, type=bool)
     parser.add_argument('--include_dev', dest='include_dev', action='store_true')
     parser.set_defaults(include_dev=False)
     return parser.parse_args()
@@ -63,32 +61,12 @@ def initialize_vocabulary(vocabulary_path):
     else:
         raise ValueError("Vocabulary file %s not found.", vocabulary_path)
 
-def process_glove_line(line):
-    found = 0
-    array = line.lstrip().rstrip().split(" ")
-    word = array[0]
-    vector = list(map(float, array[1:]))
-    if word in rev_vocab:
-        idx = rev_vocab.index(word)
-        glove[idx, :] = vector
-        found += 1
-    if word.capitalize() in rev_vocab:
-        idx = rev_vocab.index(word.capitalize())
-        glove[idx, :] = vector
-        found += 1
-    if word.upper() in rev_vocab:
-        idx = rev_vocab.index(word.upper())
-        glove[idx, :] = vector
-        found += 1
-    return found
-
 def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
     """
     :param vocab_list: [vocab]
     :return:
     """
     if not gfile.Exists(save_path + ".npz"):
-        global glove
         glove_path = os.path.join(args.glove_dir, "glove.{}.{}d.txt".format(args.glove_crawl_size, args.glove_dim))
         if random_init:
             glove = np.random.randn(len(vocab_list), args.glove_dim)
@@ -97,15 +75,22 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
         found = 0
         size = {"6B": 400000, "840B": 2196017}[args.glove_crawl_size]
         with open(glove_path, 'r') as fh:
-            if args.parallel:
-                threads = mp.cpu_count()
-                print("Running with {:d} threads".format(threads))
-                pool = mp.Pool(processes=threads)
-                found = sum(pool.map(process_glove_line, fh))
-                pool.close()
-                pool.terminate()
-            else:
-                found = sum(process_glove_line(line) for line in tqdm(fh, total=size))
+            for line in tqdm(fh, total=size):
+                array = line.lstrip().rstrip().split(" ")
+                word = array[0]
+                vector = list(map(float, array[1:]))
+                if word in vocab_list:
+                    idx = vocab_list.index(word)
+                    glove[idx, :] = vector
+                    found += 1
+                if word.capitalize() in vocab_list:
+                    idx = vocab_list.index(word.capitalize())
+                    glove[idx, :] = vector
+                    found += 1
+                if word.upper() in vocab_list:
+                    idx = vocab_list.index(word.upper())
+                    glove[idx, :] = vector
+                    found += 1
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
         np.savez_compressed(save_path, glove=glove)
