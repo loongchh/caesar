@@ -31,14 +31,15 @@ def choose_model(embeddings, debug=False):
 
 def checkpoint_model(session,run_id, version=1):
     saver = tf.train.Saver()
-    save_dir = pjoin(FLAGS.train_dir, FLAGS.model, run_id)
+    save_dir_base = pjoin(FLAGS.train_dir, FLAGS.model)
+    save_dir = pjoin(save_dir_base, run_id)
     if not os.path.exists(save_dir):
         os.makedirs(save_dir)
     save_path = saver.save(session,pjoin(save_dir, "model-{}.ckpt".format(version)))
     logger.info("Model saved at: %s" % save_path)
 
     if FLAGS.cluster_mode ==1:
-        copyToHDFS(save_dir, pjoin(FLAGS.train_dir, FLAGS.model) )
+        copyToHDFS(save_dir, save_dir_base )
 
 
 def restore_model(session, run_id, version=1):
@@ -51,10 +52,15 @@ def restore_model(session, run_id, version=1):
     logger.info("Model restored from: {}".format(save_path))
 
 
-def copyToHDFS(local_dir, hdfs_dir):
-    FNULL = open(os.devnull, 'w')
-    subprocess.call(["hdfs", "dfs", "-mkdir", "-p", hdfs_dir], stdout=FNULL, stderr=FNULL)
-    subprocess.call(["hdfs", "dfs", "-copyFromLocal", local_dir, hdfs_dir], stdout=FNULL, stderr=FNULL)
+def copyToHDFS(local_dir, hdfs_base_dir):
+    logger.info("Making sure hdfs base dir is present:  %s" % hdfs_base_dir)
+    subprocess.call(["hdfs", "dfs", "-mkdir", "-p", hdfs_base_dir])
+
+    logger.info("Deleting previously checkpointed model:  %s" % local_dir)
+    subprocess.call(["hdfs", "dfs", "-rm", "-r", local_dir])
+
+    logger.info("Copy the new model:  %s" % local_dir)
+    subprocess.call(["hdfs", "dfs", "-copyFromLocal", local_dir, hdfs_base_dir])
 
 
 def load_embeddings():
