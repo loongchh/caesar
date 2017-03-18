@@ -2,8 +2,8 @@ import tensorflow as tf
 
 def parse_args():
     # model
-    tf.app.flags.DEFINE_string("model","coattention", "coattention/match_lstm/match_lstm_boundry")
-    tf.app.flags.DEFINE_string("run_id","model_2_nltk_trained", "model run id, eg. 2017-03-15-01-51-39")
+    tf.app.flags.DEFINE_string("model", "coattention", "coattention/match_lstm/match_lstm_boundry")
+    tf.app.flags.DEFINE_string("run_id","", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
     tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
@@ -16,16 +16,16 @@ def parse_args():
     tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_document_size", 600, "")
+    tf.app.flags.DEFINE_integer("max_document_size", 300, "")
     tf.app.flags.DEFINE_integer("min_question_size", 0, "")
     tf.app.flags.DEFINE_integer("max_question_size", 40, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
     tf.app.flags.DEFINE_integer("max_answer_size", 20, "")
-    tf.app.flags.DEFINE_bool("embedding_trainable", True, "Allow training of embedding vectors")
+    tf.app.flags.DEFINE_bool("embedding_trainable", False, "Allow training of embedding vectors")
 
     # Model Specific Parameters
     # Coattention
-    tf.app.flags.DEFINE_integer("max_summary_size", 600, "Truncate the document to specific length.")
+    tf.app.flags.DEFINE_integer("max_summary_size", 300, "Truncate the document to specific length. MUST BE EVEN.")
     tf.app.flags.DEFINE_string("pool_type", "max", "Pooling mechanism used to summarize each sentence.")
 
     # Directories
@@ -42,8 +42,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 1, "Print predicted text after every n epochs")
-    tf.app.flags.DEFINE_integer("cluster_mode", 1, "Print predicted text after every n epochs")
-    # tf.app.flags.DEFINE_integer("print_every", 1, "How many iterations to do per print.")
-    # tf.app.flags.DEFINE_integer("keep", 0, "How many checkpoints to keep, 0 indicates keep all.")
 
     tf.app.flags.DEFINE_string("comment", "", "Comment that will be printed in the end, put some")
+    tf.app.flags.DEFINE_integer("cluster_mode", 0, "whether the training is on gpu cluster")
+    tf.app.flags.DEFINE_bool("codalab", False, "whether the execution is on codalab")

@@ -14,7 +14,7 @@ import tensorflow as tf
 
 from preprocessing.squad_preprocess import data_from_json, maybe_download, squad_base_url,tokenize
 import qa_data
-import qa_data_util as du
+from qa_data_util import *
 from  parse_args import parse_args
 
 logging.basicConfig(level=logging.INFO)
@@ -97,7 +97,7 @@ def generate_answers(session,model, dataset, rev_vocab):
     num_dev_batches = int(len(dataset['q'])/FLAGS.batch_size) + 1
     prog = Progbar(target=num_dev_batches)
     for i in range(num_dev_batches):
-        data_batch = du.get_batch(dataset, i)
+        data_batch = get_batch(dataset, i)
         pred = model.predict_on_batch(sess=session, data_batch=data_batch)
         for j,document in enumerate(data_batch['c']):
             answers[data_batch['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
@@ -108,8 +108,8 @@ def generate_answers(session,model, dataset, rev_vocab):
 
 
 def main(_):
-    vocab,rev_vocab = du.initialize_vocab()
-    embeddings = du.load_embeddings()
+    vocab,rev_vocab = initialize_vocab()
+    embeddings = load_embeddings()
 
     if not os.path.exists(FLAGS.log_dir):
         os.makedirs(FLAGS.log_dir)
@@ -131,8 +131,8 @@ def main(_):
 
     contexts = [qa_data.basic_tokenizer(records) for records in contexts]
 
-    questions, questions_mask, questions_seq = du.padding(du.cast_to_int(questions), FLAGS.max_question_size)
-    contexts, contexts_mask, contexts_seq = du.padding(du.cast_to_int(contexts), FLAGS.max_document_size)
+    questions, questions_mask, questions_seq = padding(cast_to_int(questions), FLAGS.max_question_size)
+    contexts, contexts_mask, contexts_seq = padding(cast_to_int(contexts), FLAGS.max_document_size)
 
     dataset = {
         'q': questions,
@@ -146,10 +146,10 @@ def main(_):
     print("lenght of dev set: {}".format(len(dataset['q'])))
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
-    model = du.choose_model(embeddings=embeddings)
+    model = choose_model(embeddings=embeddings)
 
     with tf.Session() as sess:
-        du.restore_model(session=sess, run_id=FLAGS.run_id)
+        restore_model(session=sess, run_id=FLAGS.run_id)
         answers = generate_answers(sess, model, dataset, rev_vocab=rev_vocab)
 
         # write to json file to root dir
