@@ -1,0 +1,7 @@
+cl work main::cs224n-maloks-w
+model=$1
+run_id=$2
+
+cl upload code -n code-${model}-${run_id} -z
+
+cl upload train/${model}/${run_id} -n model-${model}-${run_id} -z
