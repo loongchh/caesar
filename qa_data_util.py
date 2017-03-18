@@ -43,7 +43,10 @@ def checkpoint_model(session,run_id, version=1):
 
 def restore_model(session, run_id, version=1):
     saver = tf.train.Saver()
-    save_path = pjoin(FLAGS.train_dir, FLAGS.model, run_id, "model-{}.ckpt".format(version))
+    if FLAGS.codalab:
+        save_path = pjoin("model", "model-{}.ckpt".format(version))
+    else:
+        save_path = pjoin(FLAGS.train_dir, FLAGS.model, run_id, "model-{}.ckpt".format(version))
     saver.restore(session, save_path)
     logger.info("Model restored from: {}".format(save_path))
 
