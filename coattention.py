@@ -189,6 +189,7 @@ class CoattentionModel():
                 q_sen = None
 
             assert_shape(q_sen, "q_sen", [None, FLAGS.state_size])
+            tf.Print(q_sen, [q_sen])
             
             D_list = []
             tf.while_loop(lambda i: tf.less(i, tf.shape(D)[0]), \
