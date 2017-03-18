@@ -190,13 +190,14 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
     
     if sentences:
         n_sentence = []
-        # print(sentences)
-        for sentence_span in sentences:
-            if sentence_span[-1] >= max_length:
-                sentence_span = [s for s in sentence_span if s < max_length]
-            n_sentence.append(len(sentence_span))
-            sentence_span.append(max_length)
-            sentence_span += [-1] * (max_length + 1 - len(sentence_span))
+        sentence_span = []
+        for sen in sentences:
+            sentence_start = [s for s in sen if s < max_length] if sen[-1] >= max_length else sen
+            n_sentence.append(len(sentence_start))
+            sentence_end = sentence_start[1:] + [max_length]
+            sentence_start += [-1] * (max_length - len(sentence_start))
+            sentence_end += [-1] * (max_length - len(sentence_end))
+            sentence_span.append(zip(*[sentence_start, sentence_end]))
 
         answer_span = []
         for (j, ans) in enumerate(spans):
@@ -205,7 +206,7 @@ def padding(data, max_length, zero_vector=0, sentences=None, spans=None):
             except StopIteration as si:
                 answer_span.append(-1)
 
-        return data, mask, seq, sentences, n_sentence, answer_span
+        return data, mask, seq, sentence_span, n_sentence, answer_span
 
     return data, mask, seq
 
@@ -301,4 +302,4 @@ if __name__ == '__main__':
     val_data = load_dataset(type = "val")
     for (key, val) in val_data.iteritems():
         print(key)
-        print(np.array(val)[:5])
+        print(np.array(val).shape)

@@ -16,7 +16,7 @@ def parse_args():
     tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_document_size", 300, "")
+    tf.app.flags.DEFINE_integer("max_document_size", 600, "")
     tf.app.flags.DEFINE_integer("min_question_size", 0, "")
     tf.app.flags.DEFINE_integer("max_question_size", 40, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
@@ -39,6 +39,7 @@ def parse_args():
     # Training, Debugging, QA Answer
     tf.app.flags.DEFINE_integer("epochs", 10, "Number of epochs to train.")
     tf.app.flags.DEFINE_bool("debug", False, "Debug mode")
+    tf.app.flags.DEFINE_bool("test_summary", False, "Testing answers retained in summarization.")
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 1, "Print predicted text after every n epochs")

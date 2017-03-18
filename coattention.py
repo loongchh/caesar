@@ -35,7 +35,7 @@ class CoattentionModel():
         self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
         self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
-        self.sentence_span_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size + 1, 2),
+        self.sentence_span_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size, 2),
                                                         name="sentence_span_placeholder")
         self.sentence_number_placeholder = tf.placeholder(tf.int32, shape=(None),
                                                           name="sentence_number_placeholder")
@@ -99,67 +99,52 @@ class CoattentionModel():
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
         
-        def summarize(document, question, sentences, n_sen, q_len, debug=False):
-            # n_sen = D_Q_sen_q_n[-1, 0]
-            # q_len = D_Q_sen_q_n[-2, 0]
-            # document = D_Q_sen_q_n[:FLAGS.max_document_size, :]
-            # question = D_Q_sen_q_n[FLAGS.max_document_size:(FLAGS.max_document_size + q_len), :]
-            # sentences = D_Q_sen_q_n[(FLAGS.max_document_size + FLAGS.max_question_size):(FLAGS.max_document_size + FLAGS.max_question_size + n_sen), :2]
+        def summarize((document, question, sentences, n_sen, q_len)):
             assert_shape(document, "document", [FLAGS.max_document_size, FLAGS.state_size])
             assert_shape(question, "question", [FLAGS.max_question_size, FLAGS.state_size])
-            assert_shape(sentences, "sentences", [FLAGS.max_document_size + 1, 2])
-            assert_shape(n_sen, "n_sen", [None])
-            assert_shape(q_len, "q_len", [None])
+            assert_shape(sentences, "sentences", [FLAGS.max_document_size, 2])
+            # assert_shape(n_sen, "n_sen", [None])
+            # assert_shape(q_len, "q_len", [None])
+
+            # Question sentence representation
+            if FLAGS.model.lower() == "max":
+                q_rep = tf.reduce_max(question[:q_len, :], axis=0)
+            else:
+                q_rep = tf.reduce_mean(question[:q_len, :], axis=0)
+            assert_shape(q_rep, "q_rep", [FLAGS.state_size])
             
             def process_sentence(sen_idx):
                 sen = document[sen_idx[0]:sen_idx[1], :]
                 rep = tf.reduce_max(sen, axis=0) if FLAGS.model.lower() == "max" \
-                                                else tf.reduce_mean(sen, axis=0)
-                assert_shape(rep, "rep", [FLAGS.state_size])
-                return rep
+                                                 else tf.reduce_mean(sen, axis=0)
+                rep /= tf.sqrt(tf.reduce_sum(tf.square(sen)))  # normalized sentence rep
+                assert_shape(rep, "rep", [FLAGS.state_size])  
+                sim = tf.reduce_sum(rep * q_rep)  # cosine similarity
+                return sim
 
             # Get sentence-level representation and sentence length
-            sen_rep = tf.map_fn(process_sentence, sentences[:n_sen, ])
-            assert_shape(sen_rep, "sen_rep", [n_sen, FLAGS.state_size])
-            
-            # Normalized sentence-level representation
-            sen_rep /= tf.sqrt(tf.reduce_sum(tf.square(sen_rep), axis=1, keep_dims=True))
-            assert_shape(sen_rep, "sen_rep", [n_sen, FLAGS.state_size])
-
-            # Question sentence representation
-            if FLAGS.model.lower() == "max":
-                q_rep = tf.reduce_max(question[:q_len, :], axis=0, keep_dims=True)
-            else:
-                q_rep = tf.reduce_mean(question[:q_len, :], axis=0, keep_dims=True)
-            assert_shape(q_rep, "q_rep", [1, FLAGS.state_size])
-            
-            # Similarity between each sentence rep and question rep
-            sen_sim = tf.matmul(q_rep, tf.transpose(sen_rep))
-            assert_shape(sen_sim, "sen_sim", [1, None])
+            sen_sim = tf.map_fn(process_sentence, sentences[:n_sen, ], dtype=tf.float32)
+            assert_shape(sen_sim, "sen_sim", [None])
 
             # Find key sentence with highest similarity to question
-            (_, core_sen) = tf.nn.top_k(sen_sim, k=1)
-            core_sen = core_sen[0, 0]
+            (_, key_sen) = tf.nn.top_k(sen_sim)
+            key_sen = key_sen[0]
 
             # Truncate document around the key sentence
-            core_sen_from = sentences[core_sen, 0]
-            core_sen_to = sentences[core_sen, 1]
-            core_sen_cen = (core_sen_from + core_sen_to) / 2
-            doc_from = core_sen_cen - FLAGS.max_summary_size / 2
-            doc_to = core_sen_cen + FLAGS.max_summary_size / 2
+            key_sen_from = sentences[key_sen, 0]
+            key_sen_to = sentences[key_sen, 1]
+            key_sen_cen = (key_sen_from + key_sen_to) / 2
+            doc_to = key_sen_cen + FLAGS.max_summary_size / 2
+            doc_from = key_sen_cen - FLAGS.max_summary_size / 2
 
-            if tf.less(doc_from, 0):
-                doc_from = 0
-                doc_to = FLAGS.max_summary_size
-            elif tf.greater_equal(doc_to, FLAGS.max_document_size):
-                doc_from = FLAGS.max_document_size - FLAGS.max_summary_size
-                doc_to = FLAGS.max_document_size
+            doc_from = tf.cond(tf.less(doc_from, 0), lambda: tf.constant(0), lambda: doc_from)
+            doc_from = tf.cond(tf.greater_equal(doc_from + FLAGS.max_summary_size, tf.constant(FLAGS.max_document_size)), \
+                lambda: tf.constant(FLAGS.max_document_size - FLAGS.max_summary_size), lambda: doc_from)
             
-            return document[doc_from:doc_to, :])
+            return (document[doc_from:(doc_from + FLAGS.max_summary_size), :], doc_from)
 
         (Q_embed, D_embed) = self.add_embedding()
-        s = []
-        e = []
+        summary_start = tf.constant(0)
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
@@ -172,22 +157,11 @@ class CoattentionModel():
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
         if FLAGS.max_summary_size < FLAGS.max_document_size:
-            # Constructed input concatenated along the 0th (batch) axis
-            # sen = tf.pad(self.sentence_span_placeholder, [[0, 0], [0, 0], [0, FLAGS.state_size - 2]])
-            # assert_shape(sen, "sen", [None, FLAGS.max_document_size + 1, FLAGS.state_size])
-            # q = tf.expand_dims(tf.expand_dims(self.question_seq_placeholder, -1), -1)
-            # q = tf.pad(q, [[0, 0], [0, 0], [0, FLAGS.state_size - 1]])
-            # assert_shape(q, "q", [None, 1, FLAGS.state_size])
-            # n = tf.expand_dims(tf.expand_dims(self.sentence_number_placeholder, -1), -1)
-            # n = tf.pad(n, [[0, 0], [0, 0], [0, FLAGS.state_size - 1]])
-            # assert_shape(n, "n", [None, 1, FLAGS.state_size])
-            # D_Q_sen_q_n = tf.concat(1, [D, Q, sen, q, n])
-            # assert_shape(D_Q_sen_q_n, "D_Q_sen_q_n", [None, (2 * FLAGS.max_document_size + FLAGS.max_question_size + 3), FLAGS.state_size])
-
             # Summarized document matrix of size max_summary_size
-            (D, summary_start) = tf.map_fn(self.summarize, D, Q, self.sentence_span_placeholder, \
-                self.sentence_number_placeholder, self.question_seq_placeholder, dtype=(tf.float32, dtype=tf.int32))
-            assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
+            (D, summary_start) = tf.map_fn(summarize, (D, Q, self.sentence_span_placeholder, \
+                self.sentence_number_placeholder, self.question_seq_placeholder), dtype=(tf.float32, tf.int32), back_prop=False)
+            
+            # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -197,18 +171,15 @@ class CoattentionModel():
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
             Q = tf.tanh(tf.map_fn(lambda x: tf.matmul(x, W_q) + b_q, Q))
 
-        s = tf.stack(s, axis=0)
-        e = tf.stack(e, axis=0)
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
-        return (Q, D, s, e)
+        return (Q, D, summary_start)
 
     ## ==============================
     ## COATTENTION ENCODER
     def coattention_encode(self, preprocessing, debug=False):
         Q = preprocessing[0]
         D = preprocessing[1]
-        s = preprocessing[2]
-        e = preprocessing[3]
+        summary_start = preprocessing[2]
 
         # Affinity matrix.
         L = tf.batch_matmul(Q, tf.transpose(D, [0, 2, 1]))
@@ -222,7 +193,7 @@ class CoattentionModel():
 
         # Attention of the document w.r.t question.
         C_q = tf.batch_matmul(A_q, D)
-        # assert_shape(C_q, "C_q", [None, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(C_q, "C_q", [None, FLAGS.max_question_size, FLAGS.state_size])
 
         # Attention of previous attention w.r.t document, concatenated with attention of
         # question w.r.t. document.
@@ -241,14 +212,13 @@ class CoattentionModel():
             U = tf.concat(2, U)
         
         # assert_shape(U, "U", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
-        return (U, s, e)
+        return (U, summary_start)
 
     ## ==============================
     ## FEED FORWARD DECODER
     def feed_forward_decode(self, encode, debug=False):
         Hr = encode[0]
-        s = encode[1]
-        e = encode[2]
+        summary_start = encode[1]
 
         with tf.variable_scope("Feed_Forward_Prediction"):
             W1 =tf.get_variable(name='W1',
@@ -270,14 +240,13 @@ class CoattentionModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-        return (h, pred, s, e)
+        return (h, pred, summary_start)
 
     ## ==============================
     ## ANSWER POINTER DECODER
     def answer_pointer_decode(self, encode, debug=False):
         H_r = encode[0]
-        s = encode[1]
-        e = encode[2]
+        summary_start = encode[1]
         # assert_shape(H_r, "H_r", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
 
         with tf.variable_scope("answer_pointer_decode"):
@@ -304,7 +273,7 @@ class CoattentionModel():
                 # VH_r = tf.einsum('ijk,kl->ijl', H_r, V)
                 # assert_shape(VH_r, "VH_r", [None, FLAGS.max_summary_size, FLAGS.state_size])
                 W_aH_ab_a = tf.matmul(ha[1], W_a) + b_a
-                # assert_shape(W_aH_ab_a, "W_aH_ab_a", [None, FLAGS.state_size])
+                assert_shape(W_aH_ab_a, "W_aH_ab_a", [None, FLAGS.state_size])
                 W_aH_ab_a = tf.expand_dims(W_aH_ab_a, axis=1)
                 F_k = tf.nn.tanh(VH_r + tf.tile(W_aH_ab_a, [1, FLAGS.max_summary_size, 1]))
                 F_k = tf.transpose(F_k, perm=[0, 2, 1])
@@ -312,61 +281,59 @@ class CoattentionModel():
                 
                 v_tF_k = tf.map_fn(lambda x: tf.matmul(v, x), F_k)
                 # v_tF_k = tf.einsum('ij,kjl->kil', v, F_k)
-                assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
+                # assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_no_softmax = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 beta_k = tf.nn.softmax(beta_no_softmax)
-                assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
+                # assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
                 # assert_shape(v_tF_k, "v_tF_k", [None, 1, FLAGS.max_summary_size])
                 beta_k = v_tF_k + tf.tile(c, [1, FLAGS.max_summary_size])
                 # assert_shape(beta_k, "beta_k", [None, 1, FLAGS.max_summary_size])
 
                 H_rbeta_k = tf.squeeze(tf.batch_matmul(beta_k, H_r), squeeze_dims=1)
-                # assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])
+                assert_shape(H_rbeta_k, "H_rbeta_k", [None, 2 * FLAGS.state_size])
 
                 beta.append(beta_no_softmax)
                 (_, ha) = cell(H_rbeta_k, ha)
 
             beta = tf.concat(1, beta)
-            assert_shape(beta, "beta", [None, 2, FLAGS.max_summary_size])
+            # assert_shape(beta, "beta", [None, 2, FLAGS.max_summary_size])
 
-        return (beta, tf.argmax(beta, axis=2), s, e)
+        return (beta, tf.argmax(beta, axis=2), summary_start)
 
     def cross_entropy_loss(self, decode, debug=False):
         beta = decode[0]
-        s = decode[2]
-        e = decode[3]
+        summary_start = decode[2]
+        s = self.span_placeholder[:, 0]
+        e = self.span_placeholder[:, 1]
+        retained = tf.constant(0)
         
         if FLAGS.max_summary_size < FLAGS.max_document_size:
-            mask = tf.less(s, FLAGS.max_summary_size)
+            s -= summary_start
+            e -= summary_start
+
+            mask = tf.greater_equal(s, 0)
             beta = tf.boolean_mask(beta, mask)
             s = tf.boolean_mask(s, mask)
             e = tf.boolean_mask(e, mask)
-        else:
-            s = self.span_placeholder[:, 0]
-            e = self.span_placeholder[:, 1]
+            retained = tf.count_nonzero(mask)
 
         L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
         L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
-        return ((L1 + L2) / 2., tf.count_nonzero(s - FLAGS.max_summary_size))
+        return ((L1 + L2) / 2., retained)
 
     def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
-
         gradients = optimizer.compute_gradients(loss[0])
         (grad, var) = zip(*gradients)
         (grad, _) = tf.clip_by_global_norm(grad, FLAGS.max_gradient_norm)
         
         grad_norm = []
-        # if debug:
-        #     logger.debug("Trainable variables:")
         for (i, v) in enumerate(var):
-            # if debug:
-            #     logger.debug(v.name)
             grad_norm.append(tf.global_norm([grad[i]]))
         grad_norm = tf.pack(grad_norm)
 
         train_op = optimizer.apply_gradients(zip(grad, var))
-        return (train_op, grad_norm, loss[0])
+        return (train_op, grad_norm, loss[0], loss[1])
 
     def _build(self, debug):
         self.add_placeholders()
@@ -391,8 +358,8 @@ class CoattentionModel():
 
     def summary_success(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
-        decode_output = sess.run(util.tuple_to_list(*self.loss), feed_dict=feed)
-        return decode_output[1]
+        debug_output = sess.run(util.tuple_to_list(*self.train_op), feed_dict=feed)
+        return debug_output[3]
 
     def predict_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)

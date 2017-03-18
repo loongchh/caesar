@@ -232,6 +232,7 @@ def debug():
     embeddings = load_embeddings()
     val_data = load_dataset(type = "val", debug=True)
     vocab,rev_vocab = initialize_vocab()
+
     logger.debug("==================== Debug ====================")
     with tf.Graph().as_default():
 
@@ -245,6 +246,7 @@ def debug():
 
         with tf.Session() as session:
             session.run(init)
+            
             model.debug(
                 session,
                 data_batch=get_batch(val_data,0)
@@ -274,7 +276,7 @@ def test_summary_size():
             session.run(init)
 
             successes_per_epoch = []
-            for epoch in range(FLAGS.epochs):
+            for epoch in range(1):
 
                 # TODO: tensorboard summary writer
                 # run_metadata = tf.RunMetadata()
@@ -283,28 +285,28 @@ def test_summary_size():
                 logger.debug("Epoch %d out of %d", epoch + 1, FLAGS.epochs)
                 # Training
                 successes_per_epoch.append(summary_success_epoch(val_data, model, session))
-                
 
-    def summary_success_epoch(train_data, model, session):
-        num_train_batches = int(len(train_data['q']) / FLAGS.batch_size)
-        prog = Progbar(target=num_train_batches)
-        permutation = np.random.permutation(num_train_batches*FLAGS.batch_size)
-        successes = []
-        for i in range(num_train_batches):
-            if i >= FLAGS.train_batch >= 0:
-                break
-            data_batch = get_batch(train_data, i, permutation=permutation)
-            successes.append(model.summary_success(sess=session, data_batch=data_batch))
-            prog.update(i+1, [("successes", sum(successes))])
+def summary_success_epoch(train_data, model, session):
+    num_train_batches = int(len(train_data['q']) / FLAGS.batch_size)
+    prog = Progbar(target=num_train_batches)
+    permutation = np.random.permutation(num_train_batches*FLAGS.batch_size)
+    successes = []
+    for i in range(num_train_batches):
+        if i >= FLAGS.train_batch >= 0:
+            break
+        data_batch = get_batch(train_data, i, permutation=permutation)
+        successes.append(model.summary_success(sess=session, data_batch=data_batch))
+        prog.update(i+1, [("retained", sum(successes))])
 
-        logger.debug("Summarization: %d out of %d answers are retained", sum(successes), int(len(train_data['q'])))
-        return sum(successes)
+    logger.debug("Summarization: %d out of %d answers are retained", sum(successes), int(len(train_data['q'])))
+    logger.debug("Retain rate: %.2f%%", 100. * sum(successes) / len(train_data['q']))
+    return sum(successes)
 
 if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug == 1:
         debug()
-        if FLAGS.max_summary_size < FLAGS.max_document_size:
-            test_summary_size()
+    if FLAGS.test_summary:
+        test_summary_size()
     train()
 
