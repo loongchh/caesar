@@ -2,7 +2,7 @@ import tensorflow as tf
 
 def parse_args():
     # model
-    tf.app.flags.DEFINE_string("model","coattention", "coattention/match_lstm/match_lstm_boundry")
+    tf.app.flags.DEFINE_string("model", "coattention", "coattention/match_lstm/match_lstm_boundry")
     tf.app.flags.DEFINE_string("run_id","model_2_nltk_trained", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
@@ -16,7 +16,7 @@ def parse_args():
     tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_document_size", 600, "")
+    tf.app.flags.DEFINE_integer("max_document_size", 300, "")
     tf.app.flags.DEFINE_integer("min_question_size", 0, "")
     tf.app.flags.DEFINE_integer("max_question_size", 40, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
@@ -25,7 +25,7 @@ def parse_args():
 
     # Model Specific Parameters
     # Coattention
-    tf.app.flags.DEFINE_integer("max_summary_size", 600, "Truncate the document to specific length.")
+    tf.app.flags.DEFINE_integer("max_summary_size", 300, "Truncate the document to specific length.")
     tf.app.flags.DEFINE_string("pool_type", "max", "Pooling mechanism used to summarize each sentence.")
 
     # Directories
