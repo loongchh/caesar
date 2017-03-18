@@ -83,14 +83,15 @@ def process_glove(args, vocab_list, save_path, size=4e5, random_init=True):
                     idx = vocab_list.index(word)
                     glove[idx, :] = vector
                     found += 1
-                if word.capitalize() in vocab_list:
-                    idx = vocab_list.index(word.capitalize())
-                    glove[idx, :] = vector
-                    found += 1
-                if word.upper() in vocab_list:
-                    idx = vocab_list.index(word.upper())
-                    glove[idx, :] = vector
-                    found += 1
+                if args.glove_crawl_size == "6B":
+                    if word.capitalize() in vocab_list:
+                        idx = vocab_list.index(word.capitalize())
+                        glove[idx, :] = vector
+                        found += 1
+                    if word.upper() in vocab_list:
+                        idx = vocab_list.index(word.upper())
+                        glove[idx, :] = vector
+                        found += 1
 
         print("{}/{} of word vocab have corresponding vectors in {}".format(found, len(vocab_list), glove_path))
         np.savez_compressed(save_path, glove=glove)
@@ -168,8 +169,7 @@ if __name__ == '__main__':
     # ======== Trim Distributed Word Representation =======
     # If you use other word representations, you should change the code below
 
-    glove_type = ".dev" if args.include_dev else ""
-    process_glove(args, rev_vocab, args.source_dir + "/glove.trimmed{}.{}.{}".format(glove_type, args.glove_crawl_size, args.glove_dim),
+    process_glove(args, rev_vocab, args.source_dir + "/glove.trimmed.{}.{}".format(args.glove_crawl_size, args.glove_dim),
                   random_init=args.random_init)
 
     # ======== Creating Dataset =========
