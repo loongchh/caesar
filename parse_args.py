@@ -13,7 +13,7 @@ def parse_args():
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
     tf.app.flags.DEFINE_string("tokenizer", "CORE-NLP", "NLTK/CORE-NLP")
-    tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
+    tf.app.flags.DEFINE_string("glove_crawl_size", "dev.6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
     tf.app.flags.DEFINE_integer("max_document_size", 600, "")
