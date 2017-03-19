@@ -12,7 +12,7 @@ def _3d_X_2d(_3d_tensor, _2d_tensor):
                 [-1, shape_2d[0]]
             ),
         _2d_tensor),
-        [-1, shape_3d[1], shape_3d[2]]
+        [-1, shape_3d[1], shape_2d[1]]
     )
 
 def test_3d_X_2d():
@@ -22,6 +22,7 @@ def test_3d_X_2d():
         a = session.run(tf.map_fn(lambda x: tf.matmul(x, W), L))
         b = session.run(_3d_X_2d(L,W))
         assert np.all(a==b)
+
 
 def assert_shape(var, var_name, expected):
     shape = var.get_shape().as_list()
