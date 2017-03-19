@@ -158,8 +158,7 @@ def main(_):
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
-    with open(FLAGS.dev_path) as dev_path:
-        print(json.dumps(evaluate.evaluate(json.load(dev_path), answers)))
+    print(json.dumps(evaluate.main(FLAGS.dev_path, 'dev-prediction.json')))
 
 
 
