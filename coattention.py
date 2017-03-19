@@ -86,15 +86,6 @@ class CoattentionModel():
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
 
-        # Update doc_seq and answer span_placeholder
-        # NOTE: If the answer is not located in a sentence in the summary, then the
-        #       eventual calculated span would be larger than FLAGS.max_summary_size and
-        #       result in NaN during cross entropy calculation. This is solved by
-        #       applying mask to those with incorrect spans.
-        # doc_seq.append(tf.min(FLAGS.max_summary_size, self.document_seq_placeholder[x] + doc_from))
-        # s.append(self.span_placeholder[x, 0] + doc_from)
-        # e.append(self.span_placeholder[x, 1] + doc_from)
-
     ## ==============================
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
@@ -163,7 +154,6 @@ class CoattentionModel():
             (D, summary_start) = tf.map_fn(summarize, (D, Q, self.sentence_span_placeholder, \
                 self.sentence_number_placeholder, self.document_seq_placeholder, self.question_seq_placeholder), \
                 dtype=(tf.float32, tf.int32), back_prop=False)
-            
             # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
