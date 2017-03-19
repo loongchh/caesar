@@ -57,7 +57,8 @@ class CoattentionWithoutSummaryModel():
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=FLAGS.embedding_trainable)
+        # all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=FLAGS.embedding_trainable)
+        all_embeddings = tf.constant(self.pretrained_embeddings)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
@@ -70,6 +71,7 @@ class CoattentionWithoutSummaryModel():
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
             cell_fw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+            cell_fw = tf.nn.rnn_cell.DropoutWrapper(cell_fw, input_keep_prob=FLAGS.dropout, output_keep_prob=FLAGS.dropout)
             (Q, _) = tf.nn.dynamic_rnn(cell_fw, Q_embed, sequence_length=self.question_seq_placeholder, dtype=tf.float32)
             tf.get_variable_scope().reuse_variables()
             (D, _) = tf.nn.dynamic_rnn(cell_fw, D_embed, sequence_length=self.document_seq_placeholder, dtype=tf.float32)
@@ -121,7 +123,10 @@ class CoattentionWithoutSummaryModel():
             assert_shape(coatt, "coatt", [None, FLAGS.max_document_size, 3 * FLAGS.state_size])
             
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
+            cell_fw = tf.nn.rnn_cell.DropoutWrapper(cell_fw, input_keep_prob=FLAGS.dropout, output_keep_prob=FLAGS.dropout)
+
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
+            cell_bw = tf.nn.rnn_cell.DropoutWrapper(cell_bw, input_keep_prob=FLAGS.dropout, output_keep_prob=FLAGS.dropout)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(
                 cell_fw,
                 cell_bw,
@@ -169,6 +174,8 @@ class CoattentionWithoutSummaryModel():
 
         with tf.variable_scope("answer_pointer_decode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=FLAGS.dropout, output_keep_prob=FLAGS.dropout)
+
             ha = cell.zero_state(tf.shape(H_r)[0], tf.float32)
             assert_shape(ha[1], "ha[1]", [None, FLAGS.state_size])
             beta = []
