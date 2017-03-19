@@ -227,7 +227,7 @@ class CoattentionBiLSTMModel():
                                  )
 
             Hr_W1 = tf.matmul(tf.reshape(Hr, [-1, 2 * FLAGS.state_size]), W1)
-            Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_summary_size, 2])
+            Hr_W1 = tf.reshape(Hr_W1, [-1, FLAGS.max_document_size, 2])
             h = tf.transpose(Hr_W1 + b1, perm = [0,2,1])
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
