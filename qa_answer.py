@@ -108,6 +108,7 @@ def generate_answers(session,model, dataset, rev_vocab):
     return answers
 
 
+
 def main(_):
     vocab,rev_vocab = initialize_vocab()
     embeddings = load_embeddings()
@@ -144,7 +145,7 @@ def main(_):
         'c_s': contexts_seq,
         'q_uuids':question_uuids
     }
-    print("lenght of dev set: {}".format(len(dataset['q'])))
+    print("length of dev set: {}".format(len(dataset['q'])))
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
     model = choose_model(embeddings=embeddings)
@@ -158,7 +159,7 @@ def main(_):
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
     with open(FLAGS.dev_path) as dev_path:
-        print(json.dumps(evaluate(json.load(dev_path), answers)))
+        print(json.dumps(evaluate.evaluate(json.load(dev_path), answers)))
 
 
 

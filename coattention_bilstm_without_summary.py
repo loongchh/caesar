@@ -134,7 +134,7 @@ class CoattentionBiLSTMWothoutSummaryModel():
             )
             U = tf.concat(2, U)
         
-        return U,
+        return U, A_q, A_d
 
     ## ==============================
     ## FEED FORWARD DECODER
@@ -161,7 +161,7 @@ class CoattentionBiLSTMWothoutSummaryModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-        return h, pred
+        return (h, pred, ) + encode[:1]
 
     ## ==============================
     ## ANSWER POINTER DECODER
@@ -217,7 +217,7 @@ class CoattentionBiLSTMWothoutSummaryModel():
             assert_shape(beta, "beta", [None, 2, FLAGS.max_document_size])
             pred = tf.to_int32(tf.argmax(beta, axis=2))
 
-        return beta, pred
+        return (beta, pred, ) + encode[:1]
 
     def cross_entropy_loss(self, decode, debug=False):
         beta = decode[0]
@@ -265,12 +265,19 @@ class CoattentionBiLSTMWothoutSummaryModel():
         #     if tensor.name.startswith("debug_"):
         #         logger.debug("Shape of {} == {}".format(tensor.name[6:], debug_output[i]))
 
-    def predict_on_batch(self, sess, data_batch):
+    def predict_on_batch(self, sess, data_batch, rev_vocab=None):
         feed = self.create_feed_dict(data_batch)
         decode_output = sess.run(util.tuple_to_list(*self.decode), feed_dict=feed)
 
         pred = get_answer_from_span(decode_output[1])
+        A_q = decode_output[2]
+        A_d = decode_output[3]
+        self.plot_attention_matrix(A_q, A_d, data_batch, rev_vocab)
         return pred
+
+    def plot_attention_matrix(self, A_q, A_d, data_batch, rev_vocab):
+        logger.info(A_q[0])
+
 
     def train_on_batch(self, sess, data_batch):
         feed = self.create_feed_dict(data_batch)
