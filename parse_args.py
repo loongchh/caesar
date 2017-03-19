@@ -2,7 +2,7 @@ import tensorflow as tf
 
 def parse_args():
     # model
-    tf.app.flags.DEFINE_string("model", "coattention", "coattention/match_lstm/match_lstm_boundry")
+    tf.app.flags.DEFINE_string("model", "coattention_bilstm", "coattention/match_lstm/match_lstm_boundry/coattention_bilstm/seq2seq")
     tf.app.flags.DEFINE_string("run_id","", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
@@ -13,12 +13,12 @@ def parse_args():
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("embedding_size", 100, "Size of the pretrained vocabulary.")
     tf.app.flags.DEFINE_string("tokenizer", "CORE-NLP", "NLTK/CORE-NLP")
-    tf.app.flags.DEFINE_string("glove_crawl_size", "dev.6B", "Crawl size of embeddings")
+    tf.app.flags.DEFINE_string("glove_crawl_size", "6B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
     tf.app.flags.DEFINE_integer("max_document_size", 600, "")
     tf.app.flags.DEFINE_integer("min_question_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_question_size", 40, "")
+    tf.app.flags.DEFINE_integer("max_question_size", 41, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
     tf.app.flags.DEFINE_integer("max_answer_size", 20, "")
     tf.app.flags.DEFINE_bool("embedding_trainable", False, "Allow training of embedding vectors")

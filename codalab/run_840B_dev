@@ -1,0 +1,15 @@
+cl work main::cs224n-maloks-w
+model=$1
+run_id=$2
+cl run --name run-${model}-${run_id} \
+--request-docker-image kshitiz8/squad:v1 \
+code:code-${model}-${run_id} \
+data:data_840B_300_dev \
+model:model-${model}-${run_id} \
+dev.json:0x4870af2556994b0687a1927fcec66392 \
+core-nlp:0x4848b8e2e6104f85901e4a33dffc0c3f \
+'sh code/pre_qa_answer.sh;
+python code/qa_answer.py --dev_path dev.json --codalab=true --glove_crawl_size=dev.840B --embedding_size=300;
+python code/evaluate.py  dev.json dev-prediction.json'
+
+cl wait --tail run-${model}-${run_id}

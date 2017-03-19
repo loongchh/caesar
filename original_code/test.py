@@ -1,4 +1,37 @@
 from collections import OrderedDict
+import numpy as np
+import tensorflow as tf
+L = np.random.rand(10,100,300)
+W = np.random.rand(300,300)
+with tf.Session() as session:
+    a = session.run(tf.map_fn(lambda x: tf.matmul(x, W), L))
+    b = session.run(tf.reshape(tf.matmul(tf.reshape(L, [-1, 300]), W), [-1, 100, 300]))
+    assert np.all(a==b)
+
+L = [
+        [
+            [1.,2.,3.],
+            [3.,4.,5.]
+        ],
+        [
+            [10.,12.,13.],
+            [3.,4.,5.]
+        ],
+]
+L = tf.constant(np.array(L))
+
+with tf.Session() as session:
+    L_shape = session.run(tf.shape(L))
+    print(L_shape)
+
+    A_q1 = session.run(tf.nn.softmax(L, dim=0))
+    print (A_q1)
+
+    A_q2 = session.run(tf.nn.softmax(L))
+    print (A_q2)
+
+exit()
+
 grads_to_look=OrderedDict()
 grads_to_look["Q_LSTM/RNN/LSTMCell"] = []
 grads_to_look["P_LSTM/RNN/LSTMCell"] = []
@@ -10,7 +43,7 @@ grads_to_look["REST"] = []
 for i,key in enumerate(grads_to_look):
     print i,key
 
-import numpy as np
+
 import matplotlib
 matplotlib.use('Agg')
 import matplotlib.pyplot as plt
