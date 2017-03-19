@@ -161,7 +161,7 @@ class CoattentionBiLSTMWothoutSummaryModel():
             betas = tf.nn.softmax(h)
             pred = tf.argmax(betas, 2)
 
-        return (h, pred, ) + encode[:1]
+        return (h, pred, ) + encode[1:]
 
     ## ==============================
     ## ANSWER POINTER DECODER
@@ -217,7 +217,7 @@ class CoattentionBiLSTMWothoutSummaryModel():
             assert_shape(beta, "beta", [None, 2, FLAGS.max_document_size])
             pred = tf.to_int32(tf.argmax(beta, axis=2))
 
-        return (beta, pred, ) + encode[:1]
+        return (beta, pred, ) + encode[1:]
 
     def cross_entropy_loss(self, decode, debug=False):
         beta = decode[0]
