@@ -152,8 +152,8 @@ def train():
                 f1, em = evaluate_epoch(val_data, model, session, rev_vocab, print_answer_text=(FLAGS.print_text == 1))
                 F1s.append(f1)
                 EMs.append(em)
-                logger.info("F1 history: {}".format(F1s))
-                logger.info("EM history: {}".format(EMs))
+                logger.info("F1 history: %s" % str(F1s))
+                logger.info("EM history: %s" % str(EMs))
                 # Checkpoint model
                 if f1 == max(F1s):
                     logger.info("New best model! Saving...")
@@ -309,8 +309,10 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug == 1:
         debug()
+        exit()
     if FLAGS.test_summary:
         test_summary_size()
         exit()
     train()
+
 

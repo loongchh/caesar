@@ -16,6 +16,7 @@ from preprocessing.squad_preprocess import data_from_json, maybe_download, squad
 import qa_data
 from qa_data_util import *
 from  parse_args import parse_args
+import evaluate
 
 logging.basicConfig(level=logging.INFO)
 
@@ -98,13 +99,14 @@ def generate_answers(session,model, dataset, rev_vocab):
     prog = Progbar(target=num_dev_batches)
     for i in range(num_dev_batches):
         data_batch = get_batch(dataset, i)
-        pred = model.predict_on_batch(sess=session, data_batch=data_batch)
+        pred = model.predict_on_batch(sess=session, data_batch=data_batch, rev_vocab=rev_vocab)
         for j,document in enumerate(data_batch['c']):
             answers[data_batch['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
 
         prog.update(i+1, [])
 
     return answers
+
 
 
 def main(_):
@@ -143,7 +145,7 @@ def main(_):
         'c_s': contexts_seq,
         'q_uuids':question_uuids
     }
-    print("lenght of dev set: {}".format(len(dataset['q'])))
+    print("length of dev set: {}".format(len(dataset['q'])))
     # ========= Model-specific =========
     # You must change the following code to adjust to your model
     model = choose_model(embeddings=embeddings)
@@ -155,6 +157,9 @@ def main(_):
         # write to json file to root dir
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+
+    evaluate.main(FLAGS.dev_path, 'dev-prediction.json')
+
 
 
 if __name__ == "__main__":

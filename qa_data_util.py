@@ -25,6 +25,15 @@ def choose_model(embeddings, debug=False):
     elif FLAGS.model.lower() == "coattention":
         from coattention import CoattentionModel
         model = CoattentionModel(embeddings, debug)
+    elif FLAGS.model.lower() == "coattention_bilstm":
+        from coattention_bilstm import CoattentionBiLSTMModel
+        model = CoattentionBiLSTMModel(embeddings, debug)
+    elif FLAGS.model.lower() == "coattention_bilstm_without_summary":
+        from coattention_bilstm_without_summary import CoattentionBiLSTMWothoutSummaryModel
+        model = CoattentionBiLSTMWothoutSummaryModel(embeddings, debug)
+    elif FLAGS.model.lower() == "coattention_without_summary":
+        from coattention_without_summary import CoattentionWithoutSummaryModel
+        model = CoattentionWithoutSummaryModel(embeddings, debug)
 
     return model
 
