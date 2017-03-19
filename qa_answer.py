@@ -16,6 +16,7 @@ from preprocessing.squad_preprocess import data_from_json, maybe_download, squad
 import qa_data
 from qa_data_util import *
 from  parse_args import parse_args
+import evaluate
 
 logging.basicConfig(level=logging.INFO)
 
@@ -155,6 +156,9 @@ def main(_):
         # write to json file to root dir
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
+
+     print(json.dumps(evaluate(json.load(dev_dirname), answers)))
+
 
 
 if __name__ == "__main__":
