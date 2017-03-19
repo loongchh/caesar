@@ -303,4 +303,4 @@ class CoattentionWithoutSummaryModel():
         
         grad_norm = train_op_output[1]
         loss = train_op_output[2]
-        return grad_norm, loss, None
+        return grad_norm, loss, 0
