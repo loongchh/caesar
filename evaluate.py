@@ -76,7 +76,7 @@ def evaluate(dataset, predictions):
 
 
 def main(dataset_file, prediction_file):
-
+    expected_version = '1.1'
     with open(dataset_file) as dataset_file:
         dataset_json = json.load(dataset_file)
         if (dataset_json['version'] != expected_version):

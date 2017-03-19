@@ -272,10 +272,31 @@ class CoattentionBiLSTMWothoutSummaryModel():
         pred = get_answer_from_span(decode_output[1])
         A_q = decode_output[2]
         A_d = decode_output[3]
-        self.plot_attention_matrix(A_q, A_d, data_batch, rev_vocab)
+        self.plot_attention_matrix(A_q, A_d, data_batch, rev_vocab, pred)
         return pred
 
-    def plot_attention_matrix(self, A_q, A_d, data_batch, rev_vocab):
+    def plot_attention_matrix(self, A_q, A_d, data_batch, rev_vocab, pred):
+
+
+        import matplotlib
+        matplotlib.use('Agg')
+        import matplotlib.pyplot as plt
+        import numpy as np
+        from matplotlib.backends.backend_pdf import PdfPages
+        with PdfPages('attention_plot.pdf') as pdf:
+            plt.matshow(A_q[0], fignum=10, cmap=plt.cm.gray)
+            pdf.savefig()
+            plt.matshow(np.transpose(A_d[0]), fignum=10, cmap=plt.cm.gray)
+            pdf.savefig()
+
+            fig = plt.figure()
+            fig.text(.1,.3," ".join([ rev_vocab[int(id)] if i%10!=0 else "\n"+rev_vocab[int(id)] for i,id in enumerate(data_batch['c'][0]) if id!=0]))
+            pdf.savefig()
+            fig = plt.figure()
+            fig.text(.1,.9," ".join([ rev_vocab[int(id)] if i%10!=0 else "\n"+ rev_vocab[int(id)] for i,id in enumerate(data_batch['q'][0])if id!=0]))
+            pdf.savefig()
+            plt.close()
+        logger.info(" ".join([ rev_vocab[int(data_batch['c'][0][int(id)])] for id in pred[0]]))
         logger.info(A_q[0])
 
 

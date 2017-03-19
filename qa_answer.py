@@ -99,7 +99,7 @@ def generate_answers(session,model, dataset, rev_vocab):
     prog = Progbar(target=num_dev_batches)
     for i in range(num_dev_batches):
         data_batch = get_batch(dataset, i)
-        pred = model.predict_on_batch(sess=session, data_batch=data_batch)
+        pred = model.predict_on_batch(sess=session, data_batch=data_batch, rev_vocab=rev_vocab)
         for j,document in enumerate(data_batch['c']):
             answers[data_batch['q_uuids'][j]] = " ".join([rev_vocab[document[index]] for index in pred[j]])
 
@@ -158,7 +158,7 @@ def main(_):
         with io.open('dev-prediction.json', 'w', encoding='utf-8') as f:
             f.write(unicode(json.dumps(answers, ensure_ascii=False)))
 
-    print(json.dumps(evaluate.main(FLAGS.dev_path, 'dev-prediction.json')))
+    evaluate.main(FLAGS.dev_path, 'dev-prediction.json')
 
 
 
