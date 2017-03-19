@@ -119,7 +119,7 @@ class CoattentionModel():
 
             # Find key sentence with highest similarity to question
             (_, key_sen) = tf.nn.top_k(sen_sim)
-            key_sen = key_sen[0]
+            key_sen = tf.squeeze(key_sen, squeeze_dims=0)
 
             # Truncate document around the key sentence
             key_sen_from = sentences[key_sen, 0]
