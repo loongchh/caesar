@@ -380,5 +380,5 @@ class CoattentionModel():
         
         grad_norm = train_op_output[1]
         loss = train_op_output[2]
-        retain = train_op_output[2]
+        retain = train_op_output[3]
         return grad_norm, loss, retain
