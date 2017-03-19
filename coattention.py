@@ -34,7 +34,7 @@ class CoattentionModel():
                                                    name="document_placeholder")
         self.document_mask_placeholder = tf.placeholder(tf.bool, shape=(None, FLAGS.max_document_size),
                                                         name="document_mask_placeholder")
-        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=(None), name="document_seq_placeholder")
+        self.document_seq_placeholder = tf.placeholder(tf.int32, shape=[None], name="document_seq_placeholder")
         self.sentence_span_placeholder = tf.placeholder(tf.int32, shape=(None, FLAGS.max_document_size, 2),
                                                         name="sentence_span_placeholder")
         self.sentence_number_placeholder = tf.placeholder(tf.int32, shape=(None),
@@ -99,7 +99,7 @@ class CoattentionModel():
     ## DOCUMENT AND QUESTION ENCODER
     def contextual_preprocessing(self, debug=False):
         
-        def summarize((document, question, sentences, n_sen, q_len)):
+        def summarize((document, question, sentences, n_sen, d_len, q_len)):
             assert_shape(document, "document", [FLAGS.max_document_size, FLAGS.state_size])
             assert_shape(question, "question", [FLAGS.max_question_size, FLAGS.state_size])
             assert_shape(sentences, "sentences", [FLAGS.max_document_size, 2])
@@ -107,7 +107,7 @@ class CoattentionModel():
             # assert_shape(q_len, "q_len", [None])
 
             # Question sentence representation
-            if FLAGS.model.lower() == "max":
+            if FLAGS.pool_type.lower() == "max":
                 q_rep = tf.reduce_max(question[:q_len, :], axis=0)
             else:
                 q_rep = tf.reduce_mean(question[:q_len, :], axis=0)
@@ -115,7 +115,7 @@ class CoattentionModel():
             
             def process_sentence(sen_idx):
                 sen = document[sen_idx[0]:sen_idx[1], :]
-                rep = tf.reduce_max(sen, axis=0) if FLAGS.model.lower() == "max" \
+                rep = tf.reduce_max(sen, axis=0) if FLAGS.pool_type.lower() == "max" \
                                                  else tf.reduce_mean(sen, axis=0)
                 rep /= tf.sqrt(tf.reduce_sum(tf.square(sen)))  # normalized sentence rep
                 assert_shape(rep, "rep", [FLAGS.state_size])  
@@ -134,12 +134,12 @@ class CoattentionModel():
             key_sen_from = sentences[key_sen, 0]
             key_sen_to = sentences[key_sen, 1]
             key_sen_cen = (key_sen_from + key_sen_to) / 2
+            
+            # Make sure the summary falls within actual document
             doc_to = key_sen_cen + FLAGS.max_summary_size / 2
-            doc_from = key_sen_cen - FLAGS.max_summary_size / 2
-
+            doc_to = tf.cond(tf.greater_equal(doc_to, d_len), lambda: d_len, lambda: doc_to)
+            doc_from = doc_to - FLAGS.max_summary_size
             doc_from = tf.cond(tf.less(doc_from, 0), lambda: tf.constant(0), lambda: doc_from)
-            doc_from = tf.cond(tf.greater_equal(doc_from + FLAGS.max_summary_size, tf.constant(FLAGS.max_document_size)), \
-                lambda: tf.constant(FLAGS.max_document_size - FLAGS.max_summary_size), lambda: doc_from)
             
             return (document[doc_from:(doc_from + FLAGS.max_summary_size), :], doc_from)
 
@@ -149,9 +149,11 @@ class CoattentionModel():
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
             cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-            (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed, dtype=tf.float32)
+            (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed, dtype=tf.float32,
+                                       sequence_length=self.question_seq_placeholder)
             tf.get_variable_scope().reuse_variables()
-            (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
+            (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32,
+                                       sequence_length=self.document_seq_placeholder)
         
         assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
         assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
@@ -159,7 +161,8 @@ class CoattentionModel():
         if FLAGS.max_summary_size < FLAGS.max_document_size:
             # Summarized document matrix of size max_summary_size
             (D, summary_start) = tf.map_fn(summarize, (D, Q, self.sentence_span_placeholder, \
-                self.sentence_number_placeholder, self.question_seq_placeholder), dtype=(tf.float32, tf.int32), back_prop=False)
+                self.sentence_number_placeholder, self.document_seq_placeholder, self.question_seq_placeholder), \
+                dtype=(tf.float32, tf.int32), back_prop=False)
             
             # assert_shape(D, "D", [None, FLAGS.max_summary_size, FLAGS.state_size])
 
@@ -208,7 +211,7 @@ class CoattentionModel():
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(cell_fw, cell_bw, coatt, dtype=tf.float32, \
-                sequence_length=self.document_seq_placeholder)
+                sequence_length=self.document_seq_placeholder - summary_start)
             U = tf.concat(2, U)
         
         # assert_shape(U, "U", [None, FLAGS.max_summary_size, 2 * FLAGS.state_size])
@@ -297,29 +300,32 @@ class CoattentionModel():
 
             beta = tf.concat(1, beta)
             # assert_shape(beta, "beta", [None, 2, FLAGS.max_summary_size])
+            pred = tf.to_int32(tf.argmax(beta, axis=2))
+            if FLAGS.max_summary_size < FLAGS.max_document_size:
+                pred += tf.tile(tf.expand_dims(summary_start, -1), [1, 2])
 
-        return (beta, tf.argmax(beta, axis=2), summary_start)
+        return (beta, pred, summary_start)
 
     def cross_entropy_loss(self, decode, debug=False):
         beta = decode[0]
         summary_start = decode[2]
         s = self.span_placeholder[:, 0]
         e = self.span_placeholder[:, 1]
-        retained = tf.constant(0)
+        retain = tf.constant(0)
         
-        if FLAGS.max_summary_size < FLAGS.max_document_size:
-            s -= summary_start
-            e -= summary_start
+        s -= summary_start  # no change without summarization
+        e -= summary_start
 
-            mask = tf.greater_equal(s, 0)
-            beta = tf.boolean_mask(beta, mask)
-            s = tf.boolean_mask(s, mask)
-            e = tf.boolean_mask(e, mask)
-            retained = tf.count_nonzero(mask)
+        # Mask determine if answer span falls within the summary
+        mask = tf.logical_and(tf.greater_equal(s, 0), tf.less(e, FLAGS.max_summary_size))
+        retain = tf.count_nonzero(mask)  # answer is retained in summary
+        beta = tf.boolean_mask(beta, mask)
+        s = tf.boolean_mask(s, mask)
+        e = tf.boolean_mask(e, mask)
 
         L1 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 0, :], s))
         L2 = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(beta[:, 1, :], e))
-        return ((L1 + L2) / 2., retained)
+        return ((L1 + L2) / 2., retain)
 
     def add_train_op(self, loss, debug=False):
         optimizer = tf.train.AdamOptimizer(FLAGS.learning_rate)
@@ -374,5 +380,5 @@ class CoattentionModel():
         
         grad_norm = train_op_output[1]
         loss = train_op_output[2]
-        # pred = get_answer_from_span(train_op[4])
-        return grad_norm, loss
+        retain = train_op_output[2]
+        return grad_norm, loss, retain
