@@ -309,6 +309,7 @@ if __name__ == "__main__":
     parse_args.parse_args()
     if FLAGS.debug == 1:
         debug()
+        exit()
     if FLAGS.test_summary:
         test_summary_size()
         exit()
