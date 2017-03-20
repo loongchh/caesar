@@ -6,6 +6,7 @@ import util
 from qa_data_util import get_answer_from_span
 from tf_util import _3d_X_2d
 from tf_util import assert_shape
+import numpy as np
 # from ops import *
 
 FLAGS = tf.app.flags.FLAGS
@@ -40,7 +41,7 @@ class CoattentionWithoutSummaryModel():
 
     def create_feed_dict(self, data_batch, dropout=1.):
         feed_dict = {
-            self.dropout_placeholder: dropout,
+            self.dropout_placeholder: np.float32(dropout),
             self.question_placeholder: data_batch['q'],
             self.question_mask_placeholder: data_batch['q_m'],
             self.question_seq_placeholder: data_batch['q_s'],

@@ -2,13 +2,14 @@ import tensorflow as tf
 
 def parse_args():
     # model
-    tf.app.flags.DEFINE_string("model", "coattention_without_summary", "coattention/match_lstm/match_lstm_boundry/coattention_bilstm/seq2seq")
-    tf.app.flags.DEFINE_string("run_id","model-6", "model run id, eg. 2017-03-15-01-51-39")
+    # tf.app.flags.DEFINE_string("model", "coattention_without_summary", "coattention/match_lstm/match_lstm_boundry/coattention_bilstm/seq2seq")
+    tf.app.flags.DEFINE_string("model", "match_lstm_boundry", "coattention/match_lstm/match_lstm_boundry/coattention_bilstm/seq2seq")
+    tf.app.flags.DEFINE_string("run_id","2017_03_19_15_30_28", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
     tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
     tf.app.flags.DEFINE_float("max_gradient_norm", 5.0, "Clip gradients to this norm.")
-    tf.app.flags.DEFINE_float("dropout", 1 - 0.2, "Fraction of units randomly dropped on non-recurrent connections.")
+    tf.app.flags.DEFINE_float("dropout", 1, "Fraction of units randomly dropped on non-recurrent connections.")
     tf.app.flags.DEFINE_integer("batch_size", 40, "Batch size to use during training.")
     tf.app.flags.DEFINE_integer("state_size", 200, "Size of each model layer.")
     tf.app.flags.DEFINE_integer("embedding_size", 300, "Size of the pretrained vocabulary.")
@@ -16,11 +17,11 @@ def parse_args():
     tf.app.flags.DEFINE_string("glove_crawl_size", "840B", "Crawl size of embeddings")
     tf.app.flags.DEFINE_string("optimizer", "adam", "adam / sgd")
     tf.app.flags.DEFINE_integer("min_document_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_document_size", 500, "")
+    tf.app.flags.DEFINE_integer("max_document_size", 300, "")
     tf.app.flags.DEFINE_integer("min_question_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_question_size", 35, "")
+    tf.app.flags.DEFINE_integer("max_question_size", 25, "")
     tf.app.flags.DEFINE_integer("min_answer_size", 0, "")
-    tf.app.flags.DEFINE_integer("max_answer_size", 20, "")
+    tf.app.flags.DEFINE_integer("max_answer_size", 15, "")
     tf.app.flags.DEFINE_bool("embedding_trainable", False, "Allow training of embedding vectors")
 
     # Model Specific Parameters
@@ -43,7 +44,6 @@ def parse_args():
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 0, "Print predicted text after every n epochs")
-    tf.app.flags.DEFINE_bool("word_lookup", True, "Whether to lookup new words in train and dev data")
 
     tf.app.flags.DEFINE_string("comment", "", "Comment that will be printed in the end, put some")
     tf.app.flags.DEFINE_integer("cluster_mode", 0, "whether the training is on gpu cluster")

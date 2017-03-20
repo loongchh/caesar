@@ -32,6 +32,7 @@ def read_partitioned_glove(new_words):
                         new_words[partition].remove(array[0])
                     if len(new_words[partition]) <=0:
                         break
+        # break
     return missing_vocab_embedding
 
 
@@ -61,6 +62,7 @@ def enhance_vocabulary(vocab, rev_vocab, embedding, missing_words, glove_dim=300
     embeddings_found, elapsed = timed(lambda: read_partitioned_glove(partitioned_missing_words))
 
     random_init = np.random.randn(len(missing_words)-len(embeddings_found),glove_dim)
+    _jj = 0
 
     logger.info('Took %d secs for embedding lookup' % elapsed)
     original_size = len(vocab)
@@ -69,10 +71,13 @@ def enhance_vocabulary(vocab, rev_vocab, embedding, missing_words, glove_dim=300
         vocab[word] = str(i + original_size)
         rev_vocab.append(word)
         if word in embeddings_found:
+            # print("F: %d" % len(embeddings_found[word]))
             delta_embedding.append(np.array(embeddings_found[word], dtype=np.float32))
         else:
-            a = np.random.random_sample(glove_dim)
-            delta_embedding.append(a)
+            a = random_init[_jj]
+            _jj +=1
+            # print("NF: %d" % len(a))
+            delta_embedding.append(np.array(a, dtype=np.float32))
 
     return vocab, rev_vocab, np.append(embedding, delta_embedding,axis=0), len(embeddings_found)
 
@@ -87,11 +92,11 @@ def timed(f):
 
 
 def load_embeddings_for_test():
-    embed_path1 = os.path.join("data_6B_100", "squad", "glove.trimmed.840B.300.npz")
+    embed_path1 = os.path.join("data_840B_300", "squad", "glove.trimmed.840B.300.npz")
     embeddings1 = np.load(embed_path1)['glove']
     embeddings1=embeddings1.astype(np.float32)
 
-    embed_path2 = os.path.join("data_6B_100_dev", "squad", "glove.trimmed.840B.300.npz")
+    embed_path2 = os.path.join("data_840B_300_dev", "squad", "glove.trimmed.840B.300.npz")
     embeddings2 = np.load(embed_path2)['glove']
     embeddings2=embeddings2.astype(np.float32)
 
@@ -110,7 +115,7 @@ def test_enhance_vocabulary():
         if word not in vocab1:
             missing_words.append(word)
 
-    vocab1_new,rev_vocab1_new, embeddings1_new,found = enhance_vocabulary(vocab1, rev_vocab1, embeddings1, missing_words, 100)
+    vocab1_new,rev_vocab1_new, embeddings1_new,found = enhance_vocabulary(vocab1, rev_vocab1, embeddings1, missing_words, 300)
 
     assert len(embeddings1_new) == len(embeddings2)
     matches = sum([ 1 if np.all(embeddings1_new[i] == embeddings2[vocab2[word]]) else 0 for i,word in enumerate(rev_vocab1_new)])

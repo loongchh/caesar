@@ -3,7 +3,7 @@ import tensorflow as tf
 def parse_args():
     # model
     tf.app.flags.DEFINE_string("model", "coattention_without_summary", "coattention/match_lstm/match_lstm_boundry/coattention_bilstm/seq2seq")
-    tf.app.flags.DEFINE_string("run_id","model-6", "model run id, eg. 2017-03-15-01-51-39")
+    tf.app.flags.DEFINE_string("run_id","2017_03_19_15_30_28", "model run id, eg. 2017-03-15-01-51-39")
 
     # Hyper Parameters
     tf.app.flags.DEFINE_float("learning_rate", 0.001, "Learning rate.")
@@ -43,7 +43,6 @@ def parse_args():
     tf.app.flags.DEFINE_integer("train_batch", -1, "No of batches used in training. Set -1 to train on all.")
     tf.app.flags.DEFINE_integer("val_batch", -1, "No of batches used in validaton. Set -1 to validate on all.")
     tf.app.flags.DEFINE_integer("print_text", 0, "Print predicted text after every n epochs")
-    tf.app.flags.DEFINE_bool("word_lookup", True, "Whether to lookup new words in train and dev data")
 
     tf.app.flags.DEFINE_string("comment", "", "Comment that will be printed in the end, put some")
     tf.app.flags.DEFINE_integer("cluster_mode", 0, "whether the training is on gpu cluster")
