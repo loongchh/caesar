@@ -5,6 +5,7 @@ import tensorflow as tf
 import util
 import qa_data_util as du
 from model import QAModel
+from tf_util import assert_shape, _3d_X_2d
 
 FLAGS = tf.app.flags.FLAGS
 
@@ -60,20 +61,13 @@ class MatchLstmBoundryModel(QAModel):
             feed_dict[self.dropout_placeholder] = dropout
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
-        if 'a' in data_batch and data_batch['a'] is not None:
-            feed_dict[self.answer_placeholder] = data_batch['a']
-        if 'a_m' in data_batch and data_batch['a_m'] is not None:
-            feed_dict[self.answer_mask_placeholder] = data_batch['a_m']
-        if 'a_s' in data_batch and data_batch['a_s'] is not None:
-            feed_dict[self.answer_seq_placeholder] = data_batch['a_s']
 
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, dtype=tf.float32, trainable=True)
+        all_embeddings = tf.constant(self.pretrained_embeddings)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
-
         return question_embeddings, document_embeddings
 
 
@@ -86,13 +80,14 @@ class MatchLstmBoundryModel(QAModel):
 
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
-            cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size, forget_bias=1.0)
-            (Q, _) = tf.nn.dynamic_rnn(cell, Q_embed, dtype=tf.float32)
+            cell_fw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+            cell_fw = tf.nn.rnn_cell.DropoutWrapper(cell_fw, input_keep_prob=FLAGS.dropout, output_keep_prob=FLAGS.dropout)
+            (Q, _) = tf.nn.dynamic_rnn(cell_fw, Q_embed, sequence_length=self.question_seq_placeholder, dtype=tf.float32)
             tf.get_variable_scope().reuse_variables()
-            (D, _) = tf.nn.dynamic_rnn(cell, D_embed, dtype=tf.float32)
+            (D, _) = tf.nn.dynamic_rnn(cell_fw, D_embed, sequence_length=self.document_seq_placeholder, dtype=tf.float32)
 
-        self.assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
-        self.assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
+        assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
+        assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
 
         # Non-linear projection layer on top of the question encoding.
         with tf.variable_scope("Q-TANH"):
@@ -100,15 +95,12 @@ class MatchLstmBoundryModel(QAModel):
                                   dtype=tf.float32, initializer=tf.contrib.layers.xavier_initializer())
             b_q = tf.get_variable("b_q", shape=(FLAGS.state_size),
                                   dtype=tf.float32, initializer=tf.constant_initializer(0.))
+            Q = tf.tanh(_3d_X_2d(Q, W_q) + b_q)
 
-            Q = tf.scan(lambda a, x: tf.matmul(x, W_q), Q)
-            Q = tf.matmul(tf.reshape(Q, [-1, FLAGS.state_size]), W_q) + b_q
-            Q = tf.reshape(Q, [-1, FLAGS.max_question_size, FLAGS.state_size])
-            Q = tf.tanh(Q)
+        assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
 
-        self.assert_shape(Q, "Q", [None, FLAGS.max_question_size, FLAGS.state_size])
-        self.assert_shape(D, "D", [None, FLAGS.max_document_size, FLAGS.state_size])
-        return (Q, D)
+        return Q, D
+
 
 
 
@@ -158,44 +150,39 @@ class MatchLstmBoundryModel(QAModel):
     ####################################
     #####  Match LSTM Layer #########
     ####################################
-    def add_match_lstm_op(self, preprocessing_rep, debug_shape=False):
+    def add_match_lstm_op(self, preprocessing_rep):
         H_Q = preprocessing_rep[0]
-        H_P = tf.unpack(preprocessing_rep[1])
-        fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd',debug_shape=debug_shape)
-        rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev',debug_shape=debug_shape)
+        H_P = tf.unpack(tf.transpose(preprocessing_rep[1], [1, 0, 2]))
+        fwd = self.match_lstm_direction_op(H_P, H_Q, direction='fwd')
+        rev = self.match_lstm_direction_op(H_P, H_Q, direction='rev')
 
         Hr = tf.concat(2, [fwd[0], rev[0]])
         match_lstm_rep = (Hr,)
-        if debug_shape:
-            return match_lstm_rep + (tf.shape(Hr,name="debug_MLL_Hr"),) + fwd + rev + preprocessing_rep
         return match_lstm_rep + preprocessing_rep
 
     #  Match LSTM Forward/Bacward Layer #########
-    def match_lstm_direction_op(self, H_P, H_Q, direction, debug_shape=False):
+    def match_lstm_direction_op(self, H_P, H_Q, direction):
         if direction == "rev":
             tf.reverse(H_P, [True, False, False])
         with tf.variable_scope("Match_LSTM_{}".format(direction)):
             W_q = tf.get_variable(name='W_q',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
+                                 shape=[FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
                                  initializer=tf.contrib.layers.xavier_initializer()
-                                 # initializer=tf.truncated_normal_initializer(stddev=0.1)
                                  )
-            W_p =tf.get_variable(name='W_p',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
+            W_p = tf.get_variable(name='W_p',
+                                 shape=[FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 # initializer=tf.truncated_normal_initializer(stddev=0.1)
                                  initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
-            W_r =tf.get_variable(name='W_r',
-                                 shape = [FLAGS.state_size, FLAGS.state_size],
+            W_r = tf.get_variable(name='W_r',
+                                 shape=[FLAGS.state_size, FLAGS.state_size],
                                  dtype=tf.float32,
-                                 # initializer=tf.truncated_normal_initializer(stddev=0.1)
                                  initializer=tf.contrib.layers.xavier_initializer()
                                  )
 
-            b_p =tf.get_variable(name='b_p',
+            b_p = tf.get_variable(name='b_p',
                                  shape = [FLAGS.state_size],
                                  dtype=tf.float32,
                                  initializer=tf.constant_initializer(0.0)
@@ -214,29 +201,29 @@ class MatchLstmBoundryModel(QAModel):
                                  )
 
             cell = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
-
             hr = cell.zero_state(tf.shape(H_Q)[0], tf.float32)
+
             Hr = []
             for i, H_Pi in enumerate(H_P):
                 if i > 0:
                     tf.get_variable_scope().reuse_variables()
 
-                Wq_HQ = tf.matmul(tf.reshape(H_Q, [-1, FLAGS.state_size]), W_q)
-                Wq_HQ = tf.reshape(Wq_HQ,[-1, FLAGS.max_question_size, FLAGS.state_size])
+                Wq_HQ = _3d_X_2d(H_Q, W_q)
+                assert_shape(Wq_HQ, "Wq_HQ", [None, FLAGS.max_question_size, FLAGS.state_size])
 
                 Wp_HPi = tf.matmul(H_P[i], W_p)
                 Wr_Hr = tf.matmul(hr[1], W_r)
 
                 _a = Wp_HPi + Wr_Hr + b_p
-                self.assert_shape(_a, "_a", [None, FLAGS.state_size])
+                assert_shape(_a, "_a", [None, FLAGS.state_size])
                 _a = tf.expand_dims(_a, axis=1)
                 Gi = tf.tile(_a, [1,FLAGS.max_question_size,1])
                 Gi = tf.nn.tanh(Gi + Wq_HQ)
+                assert_shape(Gi, "Gi", [None, FLAGS.max_question_size, FLAGS.state_size])
+                wt_Gi = tf.squeeze(_3d_X_2d(Gi, w))
 
-        #
-        #         wt_Gi = tf.reshape(tf.einsum('ijk,kl->ijl', Gi, w),[FLAGS.batch_size, FLAGS.max_question_size])
-        #
-        #         alphai = tf.nn.softmax(wt_Gi + tf.tile(b, [FLAGS.max_question_size]))
+
+                alphai = tf.nn.softmax(wt_Gi + tf.tile(b, [FLAGS.max_question_size]))
         #         alphai = tf.reshape(alphai,[FLAGS.batch_size, 1,FLAGS.max_question_size])
         #
         #         HQ_alphai = tf.einsum('ijk,ikl->ijl', alphai, H_Q)
