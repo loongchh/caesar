@@ -16,7 +16,7 @@ class QAModel(object):
         shape = var.get_shape().as_list()
         assert shape == expected, "{} of incorrect shape. Expected {}, got {}".format(var_name, expected, shape)
 
-    def debug_shape(self, sess, data_batch):
+    def debug(self, sess, data_batch):
         raise NotImplementedError
 
     def predict_on_batch(self, sess, data_batch):

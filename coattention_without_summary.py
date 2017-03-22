@@ -6,6 +6,7 @@ import util
 from qa_data_util import get_answer_from_span
 from tf_util import _3d_X_2d
 from tf_util import assert_shape
+import numpy as np
 # from ops import *
 
 FLAGS = tf.app.flags.FLAGS
@@ -38,8 +39,9 @@ class CoattentionWithoutSummaryModel():
 
         self.dropout_placeholder = tf.placeholder(tf.float32, name="dropout_placeholder")
 
-    def create_feed_dict(self, data_batch, dropout=1):
+    def create_feed_dict(self, data_batch, dropout=1.):
         feed_dict = {
+            self.dropout_placeholder: np.float32(dropout),
             self.question_placeholder: data_batch['q'],
             self.question_mask_placeholder: data_batch['q_m'],
             self.question_seq_placeholder: data_batch['q_s'],
@@ -48,16 +50,14 @@ class CoattentionWithoutSummaryModel():
             self.document_seq_placeholder: data_batch['c_s']
         }
 
-        if dropout is not None:
-            feed_dict[self.dropout_placeholder] = dropout
         if 's' in data_batch and data_batch['s'] is not None:
             feed_dict[self.span_placeholder] = data_batch['s']
-
 
         return feed_dict
 
     def add_embedding(self):
-        all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=FLAGS.embedding_trainable)
+        # all_embeddings = tf.get_variable("embeddings", initializer=self.pretrained_embeddings, trainable=FLAGS.embedding_trainable)
+        all_embeddings = tf.constant(self.pretrained_embeddings)
         question_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.question_placeholder)
         document_embeddings = tf.nn.embedding_lookup(params=all_embeddings, ids=self.document_placeholder)
         return question_embeddings, document_embeddings
@@ -70,6 +70,7 @@ class CoattentionWithoutSummaryModel():
         # Encoding question and document.
         with tf.variable_scope("QD-ENCODE"):
             cell_fw = tf.nn.rnn_cell.LSTMCell(num_units=FLAGS.state_size)
+            cell_fw = tf.nn.rnn_cell.DropoutWrapper(cell_fw, input_keep_prob=self.dropout_placeholder, output_keep_prob=self.dropout_placeholder)
             (Q, _) = tf.nn.dynamic_rnn(cell_fw, Q_embed, sequence_length=self.question_seq_placeholder, dtype=tf.float32)
             tf.get_variable_scope().reuse_variables()
             (D, _) = tf.nn.dynamic_rnn(cell_fw, D_embed, sequence_length=self.document_seq_placeholder, dtype=tf.float32)
@@ -121,7 +122,10 @@ class CoattentionWithoutSummaryModel():
             assert_shape(coatt, "coatt", [None, FLAGS.max_document_size, 3 * FLAGS.state_size])
             
             cell_fw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
+            cell_fw = tf.nn.rnn_cell.DropoutWrapper(cell_fw, input_keep_prob=self.dropout_placeholder, output_keep_prob=self.dropout_placeholder)
+
             cell_bw = tf.nn.rnn_cell.LSTMCell(FLAGS.state_size)
+            cell_bw = tf.nn.rnn_cell.DropoutWrapper(cell_bw, input_keep_prob=self.dropout_placeholder, output_keep_prob=self.dropout_placeholder)
             (U, _) = tf.nn.bidirectional_dynamic_rnn(
                 cell_fw,
                 cell_bw,
@@ -169,6 +173,8 @@ class CoattentionWithoutSummaryModel():
 
         with tf.variable_scope("answer_pointer_decode"):
             cell = tf.nn.rnn_cell.BasicLSTMCell(num_units=FLAGS.state_size, state_is_tuple=True)
+            cell = tf.nn.rnn_cell.DropoutWrapper(cell, input_keep_prob=self.dropout_placeholder, output_keep_prob=self.dropout_placeholder)
+
             ha = cell.zero_state(tf.shape(H_r)[0], tf.float32)
             assert_shape(ha[1], "ha[1]", [None, FLAGS.state_size])
             beta = []
@@ -251,7 +257,7 @@ class CoattentionWithoutSummaryModel():
         self.train_op = self.add_train_op(self.loss, debug)
 
     def debug(self, sess, data_batch):
-        feed = self.create_feed_dict(data_batch)
+        feed = self.create_feed_dict(data_batch, dropout=FLAGS.dropout)
         debug_output = sess.run(util.tuple_to_list(*self.train_op), feed_dict=feed)
 
         logger.debug("Gradient {}".format(debug_output[1]))
@@ -263,7 +269,7 @@ class CoattentionWithoutSummaryModel():
         #         logger.debug("Shape of {} == {}".format(tensor.name[6:], debug_output[i]))
 
     def predict_on_batch(self, sess, data_batch, rev_vocab=None):
-        feed = self.create_feed_dict(data_batch)
+        feed = self.create_feed_dict(data_batch, dropout=1.0)
         decode_output = sess.run(util.tuple_to_list(*self.decode), feed_dict=feed)
 
         pred = get_answer_from_span(decode_output[1])
@@ -293,12 +299,11 @@ class CoattentionWithoutSummaryModel():
             fig.text(.1,.9," ".join([ rev_vocab[int(id)] if i%10!=0 else "\n"+ rev_vocab[int(id)] for i,id in enumerate(data_batch['q'][0])if id!=0]))
             pdf.savefig()
             plt.close()
-        logger.info(" ".join([ rev_vocab[int(data_batch['c'][0][int(id)])] for id in pred[0]]))
+        logger.info(" ".join([rev_vocab[int(data_batch['c'][0][int(id)])] for id in pred[0]]))
         logger.info(A_q[0])
 
-
     def train_on_batch(self, sess, data_batch):
-        feed = self.create_feed_dict(data_batch)
+        feed = self.create_feed_dict(data_batch, dropout=FLAGS.dropout)
         train_op_output = sess.run(util.tuple_to_list(*self.train_op), feed_dict=feed)
         
         grad_norm = train_op_output[1]

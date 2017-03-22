@@ -174,7 +174,7 @@ def make_training_plots(losses, grad_norms, F1s, EMs, run_id):
         import matplotlib.pyplot as plt
         from matplotlib.backends.backend_pdf import PdfPages
         now = datetime.utcnow()
-        with PdfPages("../plots/{}-{}.pdf".format(FLAGS.model, run_id)) as pdf:
+        with PdfPages("plots/{}-{}.pdf".format(FLAGS.model, run_id)) as pdf:
             plt.clf()
             # -----------------------
             F1s = np.array(F1s)

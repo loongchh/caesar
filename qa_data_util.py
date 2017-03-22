@@ -38,6 +38,12 @@ def choose_model(embeddings, debug=False):
     return model
 
 
+def java_string_hashcode(s):
+    h = 0
+    for c in s:
+        h = (31 * h + ord(c)) & 0xFFFFFFFF
+    return ((h + 0x80000000) & 0xFFFFFFFF) - 0x80000000
+
 def checkpoint_model(session,run_id, version=1):
     saver = tf.train.Saver()
     save_dir_base = pjoin(FLAGS.train_dir, FLAGS.model)
